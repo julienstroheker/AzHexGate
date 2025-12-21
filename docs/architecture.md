@@ -2,20 +2,18 @@
 
 ## 1. Overview
 
-AzHexGate is a self‑hosted, Azure‑native reverse tunneling platform. Its purpose is to let a user expose a local application (for example http://localhost:3000) to the internet under a public, ephemeral URL like:
+AzHexGate is a self‑hosted, Azure‑native reverse tunneling platform. Its purpose is to let a user expose a local application (for example `http://localhost:3000`) to the internet under a public, ephemeral URL like:
 
-- https://4736948379.azhexgate.com
-
+- `https://4736948379.azhexgate.com`
 
 All traffic goes through infrastructure owned by the AzHexGate operator (your Azure subscription). There is no third‑party relay service: you control the public endpoint, the relay, the routing, and the security.
 
 At a high level, AzHexGate is composed of:
 
-- Local Client (Go CLI): runs on the user’s machine, connects outbound to Azure Relay, and forwards traffic between Relay and localhost.
+- Local Client (Go CLI): runs on the user’s machine, connects outbound to Azure Relay, and forwards traffic between Relay and `localhost`.
 - Cloud Gateway (Go web app): runs in Azure App Service, receives public HTTP(S)/WebSocket traffic and forwards it through Azure Relay.
 - Management API (Go service, often co‑hosted with the gateway): handles tunnel provisioning, subdomain allocation, and handing out connection metadata to the client.
 - Azure Infrastructure (Bicep): Relay, App Service, DNS, Key Vault, logging, identities, and networking.
-
 
 The user experience goal: “run one CLI command, get a public URL, no Azure setup required.”
 
@@ -26,27 +24,23 @@ The user experience goal: “run one CLI command, get a public URL, no Azure set
 2.1 Goals
 
 - Full infrastructure ownership
-- All traffic goes through Azure resources in the operator’s subscription. No external SaaS relays.
+  - All traffic goes through Azure resources in the operator’s subscription. No external SaaS relays.
 - Zero friction for end users. Users should only:
   - install the CLI
-  - run: azhexgate start --port 3000
-  - get back a URL like https://12345678.azhexgate.com.
+  - run: `azhexgate start --port 3000`
+  - get back a URL like `https://12345678.azhexgate.com`.
 - Production‑grade security and reliability
   - No inbound ports on the user’s machine.
   - Encrypted tunnels end‑to‑end.
   - Principle of least privilege in Azure.
   - Logging/observability for debugging and auditing.
-
 - Modular, testable design
-- Clear separation between client, gateway, management, and infra.
-- High unit and integration test coverage.
-- Infrastructure as code (Bicep) with CI validation.
-
+  - Clear separation between client, gateway, management, and infra.
+  - High unit and integration test coverage.
+  - Infrastructure as code (Bicep) with CI validation.
 - Incremental evolution
   - Start with API key auth, later add OIDC.
   - Start with simple HTTP tunneling, later extend to WebSockets / other protocols.
-
-
 
 2.2 Non‑goals (for now)
 
@@ -61,17 +55,18 @@ The user experience goal: “run one CLI command, get a public URL, no Azure set
 3.1 Local Client (Go)
 
 Purpose:
-Runs on the user’s machine, establishes the reverse tunnel to Azure, and forwards traffic between the Relay and the local service (e.g. localhost:3000).
+
+Runs on the user’s machine, establishes the reverse tunnel to Azure, and forwards traffic between the Relay and the local service (e.g. `localhost:3000`).
 
 Responsibilities:
 
-- CLI entrypoint (azhexgate binary), providing commands like: 
-  - 'azhexgate start --port 3000'
+- CLI entrypoint (`azhexgate` binary), providing a command like: 
+  - `azhexgate start --port 3000`
   - stop will be done by sending ctrl+c
 - Contact the Management API to request a new tunnel:
   - Ask for a random subdomain (e.g. 63873749).
   - Get back:
-    - assigned subdomain (63873749.azhexgate.com)
+    - assigned subdomain (`63873749.azhexgate.com`)
     - Hybrid Connection name
     - Azure Relay endpoint
     - Listener SAS token (or equivalent credentials)
@@ -81,85 +76,81 @@ Responsibilities:
   - handle reconnection and backoff
   - handle graceful shutdown.
 - Accept incoming tunnel streams from Relay:
-  - forward them as HTTP requests to localhost:<port>
+  - forward them as HTTP requests to `localhost:<port>`
   - relay responses back to Relay for return to the caller.
 - Log local events and, optionally, send telemetry signals (e.g., connection status) to the management backend.
 
-
 Key design points:
-
-• Runs entirely outbound (no firewall/NAT configuration needed).
-• Treats the local service as a black box HTTP/WebSocket server.
-• Should not require the user to know anything about Azure Relay.
-
+- Runs entirely outbound (no firewall/NAT configuration needed).
+- Treats the local service as a black box HTTP/WebSocket server.
+- Should not require the user to know anything about Azure Relay.
 
 ---
 
 3.2 Cloud Gateway (Go, in App Service)
 
 Purpose:
+
 Public‑facing entrypoint for HTTP(S)/WebSocket traffic. It terminates TLS, checks authentication, routes per subdomain, and forwards requests into Azure Relay as the Sender.
 
 Responsibilities:
 
-• Bind to *.azhexgate.com via wildcard DNS and certificate.
-• Receive incoming HTTPS requests at URLs such as:• https://63873749.azhexgate.com/...
-
-• Inspect the Host header to determine which tunnel/subdomain is being addressed.
-• Lookup the associated Relay Hybrid Connection for that subdomain:• E.g., 63873749 → Hybrid Connection hc-63873749.
-
-• Generate or retrieve a Sender SAS token for the relevant Hybrid Connection.
-• Open a stream to the Relay and forward the incoming HTTP/WebSocket request down that stream.
-• Receive the response from the local client via Relay and write it back to the original caller.
-• Enforce API key authentication (for management API calls, and optionally for certain protected endpoints).
-• Expose the Management API endpoints (see next section).
-
+- Bind to `*.azhexgate.com` via wildcard DNS and certificate.
+- Receive incoming HTTPS requests at URLs such as:
+  - `https://63873749.azhexgate.com/...`
+- Inspect the `Host` header to determine which tunnel/subdomain is being addressed.
+- Lookup the associated Relay Hybrid Connection for that subdomain:
+  - E.g., `63873749` → Hybrid Connection `hc-63873749`.
+- Generate or retrieve a Sender SAS token for the relevant Hybrid Connection.
+- Open a stream to the Relay and forward the incoming HTTP/WebSocket request down that stream.
+- Receive the response from the local client via Relay and write it back to the original caller.
+- Enforce API key authentication (for management API calls, and optionally for certain protected endpoints).
+- Expose the Management API endpoints (see next section).
 
 Key design points:
-
-• The gateway is involved in every single request, not just connection setup.
+- The gateway is involved in every single request, not just connection setup.
 Relay is not public; the gateway is the public HTTP server.
-• Can scale out using App Service scaling and optionally Azure Front Door if needed.
-• Must be implemented in a streaming‑friendly way, avoiding buffering entire request/response bodies unnecessarily.
-
+- Can scale out using App Service scaling and optionally Azure Front Door if needed.
+- Must be implemented in a streaming‑friendly way, avoiding buffering entire request/response bodies unnecessarily.
 
 ---
 
 3.3 Management API (Go)
 
 Purpose:
+
 Provide a control plane for tunnels. The Local Client calls it to get everything it needs for a new tunnel without touching Azure directly.
 
 Responsibilities:
 
-• Provision a tunnel session:• Accept a request from the Local Client: POST /api/tunnels with parameters like:• requested local port (optional, mostly informational)
-• optional hint (name/tag)
-
-• Generate a random, unique subdomain ID (e.g., 63873749).
-• Derive or create the matching Hybrid Connection name (e.g., hc-63873749).• In v1, these may be pre‑created or created via Azure management APIs.
-
-• Generate a Listener token scoped to that Hybrid Connection.
-• Return a JSON response with:• public_url: https://63873749.azhexgate.com
-• relay_endpoint
-• hybrid_connection_name
-• listener_token
-• optional session_id.
-
-
-• Maintain tunnel metadata:• keep an in‑memory or persistent map of:• subdomain → hybrid connection
-• session state (active/inactive, last heartbeat)
-
-• support future features like listing or revoking tunnels.
-
-• Enforce authentication:• secure management endpoints via API key (initially).
-• later support OIDC so only authorized users can create/manage tunnels.
-
-• Policy enforcement:• limit number of simultaneous tunnels per user/account (future).
-• control TTL for ephemeral tunnels.
-
-
+- Provision a tunnel session:
+  - Accept a request from the Local Client: `POST /api/tunnels` with parameters like:
+    - requested local port (optional, mostly informational)
+    - optional hint (name/tag)
+  - Generate a random, unique subdomain ID (e.g., `63873749`).
+  - Derive or create the matching Hybrid Connection name (e.g., `hc-63873749`).
+    - In v1, these may be pre‑created or created via Azure management APIs.
+  - Generate a Listener token scoped to that Hybrid Connection.
+  - Return a JSON response with:
+    - `public_url`: `https://63873749.azhexgate.com`
+    - `relay_endpoint`
+    - `hybrid_connection_name`
+    - `listener_token`
+    - optional `session_id`.
+- Maintain tunnel metadata:
+  - keep an in‑memory or persistent map of:
+    - subdomain → hybrid connection
+    - session state (active/inactive, last heartbeat)
+  - support future features like listing or revoking tunnels.
+- Enforce authentication:
+  - secure management endpoints via API key (initially).
+  - later support OIDC so only authorized users can create/manage tunnels.
+- Policy enforcement:
+  - limit number of simultaneous tunnels per user/account (future).
+  - control TTL for ephemeral tunnels.
 
 Deployment note:
+
 The Management API can be co‑hosted with the Cloud Gateway in the same App Service to reuse infrastructure and keep architecture simple in the first version.
 
 ---
@@ -167,31 +158,26 @@ The Management API can be co‑hosted with the Cloud Gateway in the same App Ser
 3.4 Azure Relay Hybrid Connections
 
 Purpose:
+
 Provide a secure, outbound‑only, bi‑directional tunnel between:
-
-• Sender: Cloud Gateway in Azure
-• Listener: Local Client on the user’s machine
-
+- Sender: Cloud Gateway in Azure
+- Listener: Local Client on the user’s machine
 
 Responsibilities:
-
-• Act as the rendezvous point:• both sides connect outbound to Relay
-• Relay matches them and creates a duplex stream.
-
-• Carry HTTP/WebSocket traffic as raw streams.
-• Enforce security via SAS tokens with specific rights:• Listen (for client)
-• Send (for gateway).
-
-
-
+- Act as the rendezvous point:-
+  - both sides connect outbound to Relay
+  - Relay matches them and creates a duplex stream.
+- Carry HTTP/WebSocket traffic as raw streams.
+- Enforce security via SAS tokens with specific rights:
+  - Listen (for client)
+  - Send (for gateway).
+  - 
 Key concepts:
-
-• Namespace: e.g., azhexgate-relay-<env>
-• Hybrid Connection: one per tunnel/subdomain (in the simplest model)
-• SAS tokens:• generated by AzHexGate backend using the namespace keys
-• time‑limited, scoped to a specific Hybrid Connection.
-
-
+- Namespace: e.g., `azhexgate-relay-<env>`
+- Hybrid Connection: one per tunnel/subdomain (in the simplest model)
+- SAS tokens:
+  - generated by AzHexGate backend using the namespace keys
+  - time‑limited, scoped to a specific Hybrid Connection.
 
 ---
 
@@ -200,36 +186,32 @@ Key concepts:
 Infrastructure is expressed entirely in Bicep and deployed via GitHub Actions.
 
 Core resources:
-
-• Azure Relay Namespace• hosts all Hybrid Connections for AzHexGate.
-
-• Hybrid Connections• created programmatically or pre‑provisioned via Bicep.
-
-• App Service (Linux)• runs the Cloud Gateway + Management API.
-• bound to a custom domain like azhexgate.com.
-• uses wildcard TLS certificate for *.azhexgate.com.
-
-• Key Vault• stores:• Relay primary keys
-• API keys (for management)
-• TLS certificate secrets (optional, or use App Service cert features).
-
-
-• Azure DNS• configured with a wildcard CNAME / A record for *.azhexgate.com to the App Service.
-
-• Log Analytics + Application Insights (or similar)• telemetry, logs, metrics.
-
-• Managed Identity• used by the gateway to access Key Vault, etc.
-
-
+- Azure Relay Namespace
+  - hosts all Hybrid Connections for AzHexGate.
+- Hybrid Connections
+  - created programmatically or pre‑provisioned via Bicep.
+- App Service (Linux)
+  - runs the Cloud Gateway + Management API.
+  - bound to a custom domain like `azhexgate.com`.
+  - uses wildcard TLS certificate for `*.azhexgate.com`.
+- Key Vault
+  - stores:
+    - Relay primary keys
+    - API keys (for management)
+    - TLS certificate secrets (optional, or use App Service cert features).
+- Azure DNS
+  - configured with a wildcard CNAME / A record for *.azhexgate.com to the App Service.
+- Log Analytics + Application Insights (or similar)
+  - telemetry, logs, metrics.
+- Managed Identity
+  - used by the gateway to access Key Vault, etc.
 
 Infrastructure layers will be split into Bicep modules:
-
-• infra/main.bicep – environment entrypoint.
-• infra/modules/relay.bicep – Relay namespace + base settings.
-• infra/modules/appservice.bicep – App Service, managed identity, settings.
-• infra/modules/observability.bicep – logging, App Insights/Log Analytics.
-• infra/modules/security.bicep – Key Vault, networking rules, identity bindings.
-
+- `infra/main.bicep` – environment entrypoint.
+- `infra/modules/relay.bicep` – Relay namespace + base settings.
+- `infra/modules/appservice.bicep` – App Service, managed identity, settings.
+- `infra/modules/observability.bicep` – logging, App Insights/Log Analytics.
+- `infra/modules/security.bicep` – Key Vault, networking rules, identity bindings.
 
 ---
 
@@ -237,21 +219,24 @@ Infrastructure layers will be split into Bicep modules:
 
 This is the core “how it works” scenario:
 
-User has app at http://localhost:3000 and runs:
+User has app at `http://localhost:3000` and runs:
 
-azhexgate start --port 3000
-
+`azhexgate start --port 3000`
 
 4.1 Tunnel setup
 
 1. CLI start
+
 The Local Client parses arguments and loads configuration (API key, AzHexGate base URL, etc.).
+
 2. Management API call
+
 The client sends a request to the Management API, e.g.:• POST https://api.azhexgate.com/api/tunnels
 • Body: { "local_port": 3000 }
 • Auth: API key in a header.
 
 3. Management API provisions a tunnel session
+
 The backend:• generates a subdomain, say 63873749.
 • determines or creates hc-63873749 in the Relay namespace.
 • generates a Listener SAS token for hc-63873749.
@@ -266,8 +251,11 @@ The backend:• generates a subdomain, say 63873749.
 
 
 4. Client connects as Listener
+
 The Local Client uses relay_endpoint, hybrid_connection_name, and listener_token to initiate a Listener connection and waits for streams from Relay.
+
 5. CLI output
+   
 The CLI prints something like:Tunnel established
 Public URL: https://63873749.azhexgate.com
 Forwarding to: http://localhost:3000
