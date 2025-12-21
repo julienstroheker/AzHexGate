@@ -86,6 +86,41 @@ Key design points:
 - Should not require the user to know anything about Azure Relay.
 - Should be able to run on any OS (Windows, Mac, Linux)
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant CLI as Local Client CLI
+    participant Mgmt as Management API
+    participant Relay as Azure Relay
+    participant LocalApp as Local App (localhost:3000)
+
+    User->>CLI: Run "azhexgate start --port 3000"
+    CLI->>Mgmt: POST /api/tunnels (request new tunnel)
+    Mgmt-->>CLI: 200 OK (subdomain, HC name, listener token)
+
+    CLI->>Relay: Connect as Listener using SAS token
+    Relay-->>CLI: Connection established
+
+    CLI->>LocalApp: Health check on localhost:3000
+    LocalApp-->>CLI: 200 OK
+
+    CLI-->>User: Tunnel ready (public URL returned)
+
+    %% BAD PATHS
+    Mgmt-->>CLI: 401 Unauthorized (invalid API key)
+    CLI-->>User: Error: Authentication failed
+
+    Mgmt-->>CLI: 500 Internal Error (HC creation failed)
+    CLI-->>User: Error: Unable to create tunnel
+
+    Relay-->>CLI: 403 Forbidden (invalid listener token)
+    CLI-->>User: Error: Relay authentication failed
+
+    LocalApp-->>CLI: Connection refused
+    CLI-->>User: Error: Local port unreachable
+```
+
 ---
 
 ### 3.2 Cloud Gateway (Go, in App Service)
@@ -113,6 +148,39 @@ Key design points:
 Relay is not public; the gateway is the public HTTP server.
 - Can scale out using App Service scaling and optionally Azure Front Door if needed.
 - Must be implemented in a streaming‑friendly way, avoiding buffering entire request/response bodies unnecessarily.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as External User
+    participant Gateway as Cloud Gateway
+    participant Relay as Azure Relay
+    participant LocalClient as Local Client
+    participant LocalApp as Local App
+
+    Client->>Gateway: HTTPS GET https://1234.azhexgate.com/path
+    Gateway->>Gateway: Extract subdomain "1234"
+    Gateway->>Gateway: Lookup Hybrid Connection (hc-1234)
+
+    Gateway->>Relay: Open Sender connection using SAS token
+    Relay->>LocalClient: Forward request stream
+    LocalClient->>LocalApp: Forward HTTP request
+    LocalApp-->>LocalClient: Response
+    LocalClient-->>Relay: Response stream
+    Relay-->>Gateway: Response
+    Gateway-->>Client: 200 OK
+
+    %% BAD PATHS
+    Gateway-->>Client: 404 Not Found (unknown subdomain)
+
+    Relay-->>Gateway: 503 Listener not connected
+    Gateway-->>Client: 502 Bad Gateway (client offline)
+
+    LocalApp-->>LocalClient: 500 Internal Error
+    LocalClient-->>Relay: Error response
+    Relay-->>Gateway: Error response
+    Gateway-->>Client: 500 Internal Error
+```
 
 ---
 
@@ -153,6 +221,48 @@ Responsibilities:
 Deployment note:
 
 The Management API can be co‑hosted with the Cloud Gateway in the same App Service to reuse infrastructure and keep architecture simple in the first version.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as Local Client
+    participant Mgmt as Management API
+    participant KV as Key Vault
+    participant MSI as Managed Identity (AAD)
+    participant Relay as Azure Relay Namespace
+
+    %% --- HAPPY PATH ---
+
+    CLI->>Mgmt: POST /api/tunnels (API key auth)
+    Mgmt->>KV: Load API key(s) at startup or cached interval
+    KV-->>Mgmt: API key (cached in memory)
+
+    Mgmt->>Mgmt: Validate API key (in-memory)
+
+    Mgmt->>Mgmt: Generate subdomain + HC name
+
+    Mgmt->>MSI: Request AAD token for Relay (cached)
+    MSI-->>Mgmt: AAD access token
+
+    Mgmt->>Mgmt: Generate Listener SAS token using AAD token
+    Mgmt-->>CLI: 200 OK (public URL, HC name, SAS token)
+
+    %% --- BAD PATHS ---
+
+    CLI->>Mgmt: POST /api/tunnels (invalid API key)
+    Mgmt-->>CLI: 401 Unauthorized
+
+    Mgmt->>MSI: Request AAD token
+    MSI-->>Mgmt: Error (identity unavailable)
+    Mgmt-->>CLI: 500 Error: Unable to authenticate with Relay
+
+    Mgmt->>Mgmt: Generate SAS token
+    Mgmt-->>CLI: 500 Error: SAS generation failed
+
+    Mgmt->>Relay: (Optional) Create HC dynamically
+    Relay-->>Mgmt: 409 Conflict or 500 Error
+    Mgmt-->>CLI: 500 Error: Unable to allocate tunnel
+```
 
 ---
 
@@ -197,7 +307,6 @@ Core resources:
   - uses wildcard TLS certificate for `*.azhexgate.com`.
 - Key Vault
   - stores:
-    - Relay primary keys
     - API keys (for management)
     - TLS certificate secrets (optional, or use App Service cert features).
 - Azure DNS
@@ -205,7 +314,7 @@ Core resources:
 - Log Analytics + Application Insights (or similar)
   - telemetry, logs, metrics.
 - Managed Identity
-  - used by the gateway to access Key Vault, etc.
+  - used by the gateway to access Key Vault, Relay, etc.
 
 Infrastructure layers will be split into Bicep modules:
 - `infra/main.bicep` – environment entrypoint.
@@ -219,6 +328,37 @@ Infrastructure layers will be split into Bicep modules:
 ## 4. Request/response flow (end‑to‑end)
 
 This is the core “how it works” scenario:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Browser as External User Browser
+    participant Gateway as Cloud Gateway
+    participant Relay as Azure Relay
+    participant LocalClient as Local Client
+    participant LocalApp as Local App (localhost:3000)
+
+    Browser->>Gateway: HTTPS request to https://abcd.azhexgate.com
+    Gateway->>Gateway: Resolve subdomain → hc-abcd
+    Gateway->>Relay: Open Sender connection
+    Relay->>LocalClient: Deliver request stream
+    LocalClient->>LocalApp: Forward HTTP request
+    LocalApp-->>LocalClient: Response
+    LocalClient-->>Relay: Response stream
+    Relay-->>Gateway: Response
+    Gateway-->>Browser: Response (200 OK)
+
+    %% BAD PATHS
+    Gateway-->>Browser: 404 (subdomain not found)
+
+    Relay-->>Gateway: Listener offline
+    Gateway-->>Browser: 502 Bad Gateway
+
+    LocalApp-->>LocalClient: Timeout
+    LocalClient-->>Relay: Error
+    Relay-->>Gateway: Error
+    Gateway-->>Browser: 504 Gateway Timeout
+```
 
 User has app at `http://localhost:3000` and runs:
 
@@ -311,25 +451,30 @@ From the local app’s perspective, it is just serving traffic on `localhost:300
 
 ### 5.1 Current auth model (v0)
 
-- User → Management API
+- User → Management API  
+  Auth via API key (e.g., header `X-AzHexGate-ApiKey`).  
+  API keys are stored securely in Key Vault and loaded at startup or on a refresh interval.
 
-  Auth via API key (e.g., header X-AzHexGate-ApiKey).
+- Cloud Gateway → Azure Relay  
+  Auth via Azure AD using the App Service’s Managed Identity.  
+  The Gateway obtains an AAD access token, caches it in memory, and refreshes it proactively before expiry or reactively on authentication errors.  
+  No Relay keys are required for the Gateway, and no Key Vault calls occur in the hot path.
 
-- Cloud Gateway → Relay
+- Management API → Azure Relay  
+  Used only to generate short‑lived SAS Listener tokens for Local Clients.  
+  Preferably uses Managed Identity to request Relay access; optionally may use a single Relay Shared Access Key stored in Key Vault and cached in memory.
 
-  Auth via SAS tokens created from Key Vault‑stored Relay keys.
-
-- Local Client → Relay
-
-  Auth via Listener SAS token returned by Management API.
-
+- Local Client → Azure Relay  
+  Auth via a short‑lived Listener SAS token issued by the Management API.  
+  The Local Client never sees Relay keys and never interacts with Key Vault.
 
 Security principles:
-- No secrets in source code.
-- API keys and Relay keys stored in Key Vault.
-- SAS tokens time‑limited and scoped to specific Hybrid Connections.
-- No inbound ports on the user’s machine.
-
+- No secrets in source code or configuration files.
+- API keys stored in Key Vault; Relay keys stored only if Managed Identity cannot be used for SAS generation.
+- SAS tokens are time‑limited and scoped to a single Hybrid Connection.
+- Cloud Gateway uses Managed Identity with in‑memory token caching and automatic refresh.
+- No inbound ports on the user’s machine; all connections are outbound.
+- Key Vault is never queried per request; all secrets are cached and refreshed safely.
 
 ### 5.2 Future OIDC model (v1+)
 
@@ -545,3 +690,8 @@ Planned or potential future features:
 - Additional protocol support beyond HTTP.
 
 ---
+
+
+
+
+Keyvault not used to save/fetch relay key, can we use maanged identity and cache it in memory with some routine that check if the key has bee rotated or when there is a error reachig out to relay ?
