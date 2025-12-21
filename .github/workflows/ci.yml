@@ -27,7 +27,8 @@ jobs:
       
       - name: Verify no changes after go mod tidy
         run: |
-          git diff --exit-code go.mod go.sum || (echo "go.mod or go.sum has uncommitted changes after 'go mod tidy'" && exit 1)
+          git diff --exit-code go.mod || (echo "go.mod has uncommitted changes after 'go mod tidy'" && exit 1)
+          if [ -f go.sum ]; then git diff --exit-code go.sum || (echo "go.sum has uncommitted changes after 'go mod tidy'" && exit 1); fi
       
       - name: Build all packages
         run: go build ./...
