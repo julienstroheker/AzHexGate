@@ -21,7 +21,7 @@ The user experience goal: “run one CLI command, get a public URL, no Azure set
 
 ## 2. High‑level goals and design principles
 
-2.1 Goals
+### 2.1 Goals
 
 - Full infrastructure ownership
   - All traffic goes through Azure resources in the operator’s subscription. No external SaaS relays.
@@ -42,7 +42,7 @@ The user experience goal: “run one CLI command, get a public URL, no Azure set
   - Start with API key auth, later add OIDC.
   - Start with simple HTTP tunneling, later extend to WebSockets / other protocols.
 
-2.2 Non‑goals (for now)
+### 2.2 Non‑goals (for now)
 
 - Massive multi‑tenant SaaS product.
 - Non‑HTTP protocols (e.g. raw TCP) as first‑class citizens.
@@ -52,7 +52,7 @@ The user experience goal: “run one CLI command, get a public URL, no Azure set
 
 ## 3. Component architecture
 
-3.1 Local Client (Go)
+### 3.1 Local Client (Go)
 
 Purpose:
 
@@ -87,7 +87,7 @@ Key design points:
 
 ---
 
-3.2 Cloud Gateway (Go, in App Service)
+### 3.2 Cloud Gateway (Go, in App Service)
 
 Purpose:
 
@@ -115,7 +115,7 @@ Relay is not public; the gateway is the public HTTP server.
 
 ---
 
-3.3 Management API (Go)
+### 3.3 Management API (Go)
 
 Purpose:
 
@@ -155,7 +155,7 @@ The Management API can be co‑hosted with the Cloud Gateway in the same App Ser
 
 ---
 
-3.4 Azure Relay Hybrid Connections
+### 3.4 Azure Relay Hybrid Connections
 
 Purpose:
 
@@ -181,7 +181,7 @@ Key concepts:
 
 ---
 
-3.5 Azure Infrastructure (Bicep)
+### 3.5 Azure Infrastructure (Bicep)
 
 Infrastructure is expressed entirely in Bicep and deployed via GitHub Actions.
 
@@ -223,138 +223,154 @@ User has app at `http://localhost:3000` and runs:
 
 `azhexgate start --port 3000`
 
-4.1 Tunnel setup
+### 4.1 Tunnel setup
 
 1. CLI start
 
-The Local Client parses arguments and loads configuration (API key, AzHexGate base URL, etc.).
+    The Local Client parses arguments and loads configuration (API key, AzHexGate base URL, etc.).
 
 2. Management API call
 
-The client sends a request to the Management API, e.g.:• POST https://api.azhexgate.com/api/tunnels
-• Body: { "local_port": 3000 }
-• Auth: API key in a header.
+    The client sends a request to the Management API, e.g.:
+    - `POST https://api.azhexgate.com/api/tunnels`
+    - Body: `{ "local_port": 3000 }`
+    - Auth: API key in a header.
 
 3. Management API provisions a tunnel session
 
-The backend:• generates a subdomain, say 63873749.
-• determines or creates hc-63873749 in the Relay namespace.
-• generates a Listener SAS token for hc-63873749.
-• possibly ensures any internal metadata is stored (subdomain → hybrid connection).
-• returns:{
-  "public_url": "https://63873749.azhexgate.com",
-  "relay_endpoint": "<relay-namespace-url>",
-  "hybrid_connection_name": "hc-63873749",
-  "listener_token": "<token>",
-  "session_id": "<id>"
-}
-
+    The backend:
+    - generates a subdomain, say 63873749.
+    - determines or creates hc-63873749 in the Relay namespace.
+    - generates a Listener SAS token for hc-63873749.
+    - possibly ensures any internal metadata is stored (subdomain → hybrid connection).
+    - returns:
+      ```json
+      {
+        "public_url": "https://63873749.azhexgate.com",
+        "relay_endpoint": "<relay-namespace-url>",
+        "hybrid_connection_name": "hc-63873749",
+        "listener_token": "<token>",
+        "session_id": "<id>"
+      }
+      ```
 
 4. Client connects as Listener
 
-The Local Client uses relay_endpoint, hybrid_connection_name, and listener_token to initiate a Listener connection and waits for streams from Relay.
+    The Local Client uses `relay_endpoint`, `hybrid_connection_name`, and `listener_token` to initiate a Listener connection and waits for streams from Relay.
 
 5. CLI output
-   
-The CLI prints something like:Tunnel established
-Public URL: https://63873749.azhexgate.com
-Forwarding to: http://localhost:3000
+  
+      The CLI prints something like:
+      ```
+      Tunnel established
+      Public URL: https://63873749.azhexgate.com
+      Forwarding to: http://localhost:3000
+      ```
 
+### 4.2 Handling an external request
 
-
-4.2 Handling an external request
-
-When someone hits https://63873749.azhexgate.com:
+When someone hits `https://63873749.azhexgate.com`:
 
 1. DNS & TLS
-DNS resolves 63873749.azhexgate.com to the App Service. TLS terminates at the Cloud Gateway using the wildcard certificate.
+
+    DNS resolves `63873749.azhexgate.com` to the App Service. TLS terminates at the Cloud Gateway using the wildcard certificate.
 2. Cloud Gateway receives request
-The gateway sees:• Host: 63873749.azhexgate.com
-• Path: /some/endpoint
+
+    The gateway sees:
+    - Host: `63873749.azhexgate.com`
+    - Path: `/some/endpoint`
 
 3. Routing and lookup
-Gateway extracts 63873749 as the tunnel ID and looks up its mapping:• 63873749 → hc-63873749.
+
+    Gateway extracts `63873749` as the tunnel ID and looks up its mapping:
+    - `63873749` → `hc-63873749`.
 
 4. Sender connection via Relay
-Gateway generates (or fetches) a Sender token scoped to hc-63873749 and uses Relay SDK to open a stream to the Listener (Local Client).
+
+    Gateway generates (or fetches) a Sender token scoped to `hc-63873749` and uses Relay SDK to open a stream to the Listener (Local Client).
+
 5. Forwarding to local app
-The Local Client receives the stream from Relay and:• constructs an HTTP request towards http://localhost:3000
-• replicates method, path, headers, and body
-• sends it to the local app
-• collects the response.
+
+    The Local Client receives the stream from Relay and:
+    - constructs an HTTP request towards `http://localhost:3000`
+    - replicates method, path, headers, and body
+    - sends it to the local app
+    - collects the response.
 
 6. Response back to caller
-Response travels back in reverse:• Local app → Local Client → Relay → Cloud Gateway → External caller.
 
+    Response travels back in reverse:
+    - Local app → Local Client → Relay → Cloud Gateway → External caller.
 
-
-From the local app’s perspective, it is just serving traffic on localhost:3000.
+From the local app’s perspective, it is just serving traffic on `localhost:3000`.
 
 ---
 
 ## 5. Authentication and security
 
-5.1 Current auth model (v0)
+### 5.1 Current auth model (v0)
 
-• User → Management API
-Auth via API key (e.g., header X-AzHexGate-ApiKey).
-• Cloud Gateway → Relay
-Auth via SAS tokens created from Key Vault‑stored Relay keys.
-• Local Client → Relay
-Auth via Listener SAS token returned by Management API.
+- User → Management API
+
+  Auth via API key (e.g., header X-AzHexGate-ApiKey).
+
+- Cloud Gateway → Relay
+
+  Auth via SAS tokens created from Key Vault‑stored Relay keys.
+
+- Local Client → Relay
+
+  Auth via Listener SAS token returned by Management API.
 
 
 Security principles:
+- No secrets in source code.
+- API keys and Relay keys stored in Key Vault.
+- SAS tokens time‑limited and scoped to specific Hybrid Connections.
+- No inbound ports on the user’s machine.
 
-• No secrets in source code.
-• API keys and Relay keys stored in Key Vault.
-• SAS tokens time‑limited and scoped to specific Hybrid Connections.
-• No inbound ports on the user’s machine.
 
+### 5.2 Future OIDC model (v1+)
 
-5.2 Future OIDC model (v1+)
-
-• Add OIDC (e.g., Azure AD) for:• authenticating users to the Management API.
-• associating tunnels with user accounts.
-
-• Optionally keep API keys for automation / CI usage.
-
+- Add OIDC (e.g., Azure AD) for:
+  - authenticating users to the Management API.
+  - associating tunnels with user accounts.
+- Optionally keep API keys for automation / CI usage.
 
 ---
 
 ## 6. Scalability and performance considerations
 
-6.1 Cloud Gateway as a bottleneck
+### 6.1 Cloud Gateway as a bottleneck
 
-• All public traffic flows through the Cloud Gateway.
-• Gateway scalability is crucial:• vertical and horizontal scaling in App Service.
-• potential use of Azure Front Door as a global entrypoint.
-
-• Gateway must use efficient streaming; avoid buffering entire bodies.
-
-
-6.2 Multiple clients and tunnels
-
-• Each tunnel is uniquely identified by its subdomain ID.
-• Mapping: subdomain → Hybrid Connection name.
-• Multiple clients can run simultaneously; they each connect as Listeners to their own Hybrid Connection(s).
-• Gateway maintains a routing table/cache for subdomains.
+- All public traffic flows through the Cloud Gateway.
+- Gateway scalability is crucial:
+  - vertical and horizontal scaling in App Service.
+  - potential use of Azure Front Door as a global entrypoint.
+- Gateway must use efficient streaming; avoid buffering entire bodies.
 
 
-6.3 Resource management
+### 6.2 Multiple clients and tunnels
 
-• Keep per‑tunnel Hybrid Connections limited; consider reuse strategies later.
-• Implement TTL/cleanup for idle tunnels (future).
+- Each tunnel is uniquely identified by its subdomain ID.
+- Mapping: `subdomain` → `Hybrid Connection name`.
+- Multiple clients can run simultaneously; they each connect as Listeners to their own Hybrid Connection(s).
+- Gateway maintains a routing table/cache for subdomains.
 
+
+### 6.3 Resource management
+
+- Keep per‑tunnel Hybrid Connections limited; consider reuse strategies later.
+- Implement TTL/cleanup for idle tunnels (future).
 
 ---
 
 ## 7. Repository layout and contribution guidance
 
-7.1 Planned layout
+### 7.1 Planned layout
 
 At maturity, the repository will roughly follow:
-
+```
 .
 ├── cmd/
 │   ├── azhexgate/          # CLI entrypoint for local client
@@ -390,22 +406,20 @@ At maturity, the repository will roughly follow:
 └── docs/
     ├── architecture.md      # this file
     └── design-decisions.md
+```
 
+### 7.2 What contributors should know
 
-7.2 What contributors should know
-
-• Client changes: usually live under client/ and cmd/azhexgate/.
-• Gateway or management changes: usually live under gateway/ and cmd/gateway/.
-• Infra changes: live under infra/ and must be validated via Bicep build and GitHub Actions.
-• Shared logic: should go into internal/ where it can be reused safely.
-
+- Client changes: usually live under `client/` and `cmd/azhexgate/`.
+- Gateway or management changes: usually live under `gateway/` and `cmd/gateway/`.
+- Infra changes: live under `infra/` and must be validated via Bicep build and GitHub Actions.
+- Shared logic: should go into `internal/` where it can be reused safely.
 
 Before merging:
 
-• Ensure go test ./... passes.
-• Ensure Bicep templates build.
-• Ensure CI workflows remain green.
-
+- Ensure `go test ./...` passes.
+- Ensure Bicep templates build.
+- Ensure CI workflows remain green.
 
 ---
 
@@ -413,12 +427,12 @@ Before merging:
 
 Planned or potential future features:
 
-• OIDC authentication and user accounts.
-• Configurable custom domains per tunnel (not just *.azhexgate.com).
-• Persistent tunnel configuration (reconnect with same subdomain).
-• Web UI for managing tunnels.
-• Rate limiting and QoS controls.
-• Additional protocol support beyond HTTP.
+- OIDC authentication and user accounts.
+- Configurable custom domains per tunnel (not just *.azhexgate.com).
+- Persistent tunnel configuration (reconnect with same subdomain).
+- Web UI for managing tunnels.
+- Rate limiting and QoS controls.
+- Additional protocol support beyond HTTP.
 
 
 ---
