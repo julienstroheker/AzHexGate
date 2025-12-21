@@ -30,11 +30,6 @@ jobs:
       - name: Run go mod tidy
         run: go mod tidy
       
-      - name: Verify no changes after go mod tidy
-        run: |
-          git diff --exit-code go.mod || (echo "go.mod has uncommitted changes after 'go mod tidy'" && exit 1)
-          if [ -f go.sum ]; then git diff --exit-code go.sum || (echo "go.sum has uncommitted changes after 'go mod tidy'" && exit 1); fi
-      
       - name: Check code formatting with gofmt
         run: |
           unformatted=$(gofmt -l .)
@@ -58,6 +53,18 @@ jobs:
       
       - name: Run golangci-lint
         run: golangci-lint run --timeout=5m
+      
+      - name: Verify no files were modified by CI steps
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "ERROR: CI steps modified files. All formatting and linting must be done before committing."
+            echo "Modified files:"
+            git status --porcelain
+            echo ""
+            echo "Diff:"
+            git diff
+            exit 1
+          fi
       
       - name: Build all packages
         run: go build ./...
