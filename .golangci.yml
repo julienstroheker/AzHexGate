@@ -8,8 +8,6 @@ run:
 linters:
   enable:
     - errcheck
-    - gosimple
-    - govet
     - ineffassign
     - staticcheck
     - unused
@@ -18,6 +16,20 @@ linters:
     - unparam
     - goconst
     - gocyclo
+    - bodyclose
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - dupl
+    - dupword
+    - embeddedstructfieldcheck
+    - funlen
+    - gosec
+    - iface
+    - inamedparam
+    - lll
+    - loggercheck
 
 linters-settings:
   gocyclo:
@@ -25,6 +37,11 @@ linters-settings:
   goconst:
     min-len: 3
     min-occurrences: 3
+  funlen:
+    lines: 100
+    statements: 50
+  lll:
+    line-length: 120
 
 issues:
   exclude-use-default: false
