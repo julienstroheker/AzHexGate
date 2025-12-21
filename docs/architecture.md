@@ -625,14 +625,18 @@ If Front Door is used:
 At maturity, the repository will roughly follow:
 ```
 .
-├── cmd/
-│   ├── azhexgate/          # CLI entrypoint for local client
-│   └── gateway/            # Entry for cloud gateway/management API
 ├── client/                 # Local client implementation
+│   ├── main.go             # Minimal entry point (calls cmd.Execute())
+│   ├── cmd/                # Cobra command definitions
+│   │   ├── root.go         # Root command
+│   │   └── start.go        # Start subcommand
 │   ├── tunnel/             # Relay listener, forwarding
 │   ├── config/             # Config parsing, env handling
 │   └── auth/               # Client-side auth helpers (API key handling)
-├── gateway/
+├── gateway/                # Cloud gateway/management API implementation
+│   ├── main.go             # Entry point
+│   ├── cmd/                # Cobra command definitions (future)
+│   │   └── root.go         # Root command (future)
 │   ├── http/               # HTTP server, routing, middleware
 │   ├── relay/              # Sender integration with Azure Relay
 │   ├── management/         # Management API handlers & logic
@@ -661,10 +665,30 @@ At maturity, the repository will roughly follow:
     └── design-decisions.md
 ```
 
+#### 8.1.1 CLI Structure
+
+The `client` uses the [Cobra](https://github.com/spf13/cobra) library for CLI command structure:
+
+- `main.go`: Minimal entry point that calls `cmd.Execute()`
+- `cmd/root.go`: Defines the root command with common flags and configuration
+- `cmd/<subcommand>.go`: One file per subcommand (e.g., `start.go`)
+
+This structure provides:
+- Consistent command-line interface patterns
+- Automatic help generation
+- Shell completion support
+- Easy extensibility for new commands
+
+The `gateway` currently has a simple entry point but will adopt the same Cobra structure as features are added.
+
+The binaries are built from:
+- `client/main.go` → `azhexgate` CLI binary
+- `gateway/main.go` → `gateway` server binary
+
 ### 8.2 What contributors should know
 
-- Client changes: usually live under `client/` and `cmd/azhexgate/`.
-- Gateway or management changes: usually live under `gateway/` and `cmd/gateway/`.
+- Client changes: live under `client/` directory (main.go, cmd/, tunnel/, config/, auth/).
+- Gateway or management changes: live under `gateway/` directory (main.go, cmd/, http/, relay/, management/, routing/).
 - Infra changes: live under `infra/` and must be validated via Bicep build and GitHub Actions.
 - Shared logic: should go into `internal/` where it can be reused safely.
 
