@@ -1,6 +1,6 @@
-AzHexGate Architecture
+# AzHexGate Architecture
 
-1. Overview
+## 1. Overview
 
 AzHexGate is a self‑hosted, Azure‑native reverse tunneling platform. Its purpose is to let a user expose a local application (for example http://localhost:3000) to the internet under a public, ephemeral URL like:
 
@@ -21,7 +21,7 @@ The user experience goal: “run one CLI command, get a public URL, no Azure set
 
 ---
 
-2. High‑level goals and design principles
+## 2. High‑level goals and design principles
 
 2.1 Goals
 
@@ -55,7 +55,7 @@ Users should only:• install the CLI
 
 ---
 
-3. Component architecture
+## 3. Component architecture
 
 3.1 Local Client (Go)
 
@@ -233,7 +233,7 @@ Infrastructure layers will be split into Bicep modules:
 
 ---
 
-4. Request/response flow (end‑to‑end)
+## 4. Request/response flow (end‑to‑end)
 
 This is the core “how it works” scenario:
 
@@ -304,7 +304,7 @@ From the local app’s perspective, it is just serving traffic on localhost:3000
 
 ---
 
-5. Authentication and security
+## 5. Authentication and security
 
 5.1 Current auth model (v0)
 
@@ -334,7 +334,7 @@ Security principles:
 
 ---
 
-6. Scalability and performance considerations
+## 6. Scalability and performance considerations
 
 6.1 Cloud Gateway as a bottleneck
 
@@ -361,7 +361,7 @@ Security principles:
 
 ---
 
-7. Repository layout and contribution guidance
+## 7. Repository layout and contribution guidance
 
 7.1 Planned layout
 
@@ -421,7 +421,7 @@ Before merging:
 
 ---
 
-8. Future extensions
+## 8. Future extensions
 
 Planned or potential future features:
 
