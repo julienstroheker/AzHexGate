@@ -627,7 +627,14 @@ At maturity, the repository will roughly follow:
 .
 ├── cmd/
 │   ├── azhexgate/          # CLI entrypoint for local client
+│   │   ├── main.go         # Minimal entry point (calls cmd.Execute())
+│   │   └── cmd/            # Cobra command definitions
+│   │       ├── root.go     # Root command
+│   │       └── start.go    # Start subcommand
 │   └── gateway/            # Entry for cloud gateway/management API
+│       ├── main.go         # Minimal entry point (calls cmd.Execute())
+│       └── cmd/            # Cobra command definitions
+│           └── root.go     # Root command
 ├── client/                 # Local client implementation
 │   ├── tunnel/             # Relay listener, forwarding
 │   ├── config/             # Config parsing, env handling
@@ -660,6 +667,20 @@ At maturity, the repository will roughly follow:
     ├── architecture.md      # this file
     └── design-decisions.md
 ```
+
+#### 8.1.1 CLI Structure
+
+Both `azhexgate` and `gateway` use the [Cobra](https://github.com/spf13/cobra) library for CLI command structure:
+
+- `main.go`: Minimal entry point that calls `cmd.Execute()`
+- `cmd/root.go`: Defines the root command with common flags and configuration
+- `cmd/<subcommand>.go`: One file per subcommand (e.g., `start.go`, `serve.go`)
+
+This structure provides:
+- Consistent command-line interface patterns
+- Automatic help generation
+- Shell completion support
+- Easy extensibility for new commands
 
 ### 8.2 What contributors should know
 
