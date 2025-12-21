@@ -13,8 +13,6 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
-    - goimports
     - misspell
     - unconvert
     - unparam
@@ -22,8 +20,6 @@ linters:
     - gocyclo
 
 linters-settings:
-  goimports:
-    local-prefixes: github.com/julienstroheker/AzHexGate
   gocyclo:
     min-complexity: 15
   goconst:
