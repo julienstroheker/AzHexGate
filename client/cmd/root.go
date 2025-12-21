@@ -13,6 +13,12 @@ var rootCmd = &cobra.Command{
 	Long:  `azhexgate - Azure Hybrid Connection reverse tunnel`,
 }
 
+func init() {
+	// Disable default completion and help commands
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
+}
+
 // Execute runs the root command
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
