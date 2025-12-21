@@ -8,9 +8,10 @@
 *.so
 *.dylib
 
-# Built binaries (at root level only)
+# Built binaries
 /azhexgate
-/gateway
+/client/azhexgate
+/gateway/gateway
 
 # Test binary, built with `go test -c`
 *.test
