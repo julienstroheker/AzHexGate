@@ -22,7 +22,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.25'
+      
+      - name: Install CI prerequisites
+        run: ./scripts/install-ci-tools.sh
       
       - name: Run go mod tidy
         run: go mod tidy
@@ -31,6 +34,30 @@ jobs:
         run: |
           git diff --exit-code go.mod || (echo "go.mod has uncommitted changes after 'go mod tidy'" && exit 1)
           if [ -f go.sum ]; then git diff --exit-code go.sum || (echo "go.sum has uncommitted changes after 'go mod tidy'" && exit 1); fi
+      
+      - name: Check code formatting with gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+      
+      - name: Check imports with goimports
+        run: |
+          unformatted=$(goimports -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files have incorrect imports:"
+            echo "$unformatted"
+            exit 1
+          fi
+      
+      - name: Run go vet
+        run: go vet ./...
+      
+      - name: Run golangci-lint
+        run: golangci-lint run --timeout=5m
       
       - name: Build all packages
         run: go build ./...
