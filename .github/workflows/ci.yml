@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      
+      - name: Install CI prerequisites
+        run: ./scripts/install-ci-tools.sh
+      
+      - name: Run go mod tidy
+        run: go mod tidy
+      
+      - name: Check code formatting with gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+      
+      - name: Check imports with goimports
+        run: |
+          unformatted=$(goimports -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files have incorrect imports:"
+            echo "$unformatted"
+            exit 1
+          fi
+      
+      - name: Run go vet
+        run: go vet ./...
+      
+      - name: Run golangci-lint
+        run: golangci-lint run --timeout=5m
+      
+      - name: Verify no files were modified by CI steps
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "ERROR: CI steps modified files. All formatting and linting must be done before committing."
+            echo "Modified files:"
+            git status --porcelain
+            echo ""
+            echo "Diff:"
+            git diff
+            exit 1
+          fi
+      
+      - name: Build all packages
+        run: go build ./...
+      
+      - name: Run tests
+        run: go test ./...
