@@ -4,17 +4,17 @@
 
 AzHexGate is a self‑hosted, Azure‑native reverse tunneling platform. Its purpose is to let a user expose a local application (for example http://localhost:3000) to the internet under a public, ephemeral URL like:
 
-• https://4736948379.azhexgate.com
+- https://4736948379.azhexgate.com
 
 
 All traffic goes through infrastructure owned by the AzHexGate operator (your Azure subscription). There is no third‑party relay service: you control the public endpoint, the relay, the routing, and the security.
 
 At a high level, AzHexGate is composed of:
 
-• Local Client (Go CLI): runs on the user’s machine, connects outbound to Azure Relay, and forwards traffic between Relay and localhost.
-• Cloud Gateway (Go web app): runs in Azure App Service, receives public HTTP(S)/WebSocket traffic and forwards it through Azure Relay.
-• Management API (Go service, often co‑hosted with the gateway): handles tunnel provisioning, subdomain allocation, and handing out connection metadata to the client.
-• Azure Infrastructure (Bicep): Relay, App Service, DNS, Key Vault, logging, identities, and networking.
+- Local Client (Go CLI): runs on the user’s machine, connects outbound to Azure Relay, and forwards traffic between Relay and localhost.
+- Cloud Gateway (Go web app): runs in Azure App Service, receives public HTTP(S)/WebSocket traffic and forwards it through Azure Relay.
+- Management API (Go service, often co‑hosted with the gateway): handles tunnel provisioning, subdomain allocation, and handing out connection metadata to the client.
+- Azure Infrastructure (Bicep): Relay, App Service, DNS, Key Vault, logging, identities, and networking.
 
 
 The user experience goal: “run one CLI command, get a public URL, no Azure setup required.”
@@ -25,33 +25,34 @@ The user experience goal: “run one CLI command, get a public URL, no Azure set
 
 2.1 Goals
 
-• Full infrastructure ownership
-All traffic goes through Azure resources in the operator’s subscription. No external SaaS relays.
-• Zero friction for end users
-Users should only:• install the CLI
-• run: azhexgate start --port 3000
-• get back a URL like https://12345678.azhexgate.com.
+- Full infrastructure ownership
+- All traffic goes through Azure resources in the operator’s subscription. No external SaaS relays.
+- Zero friction for end users. Users should only:
+  - install the CLI
+  - run: azhexgate start --port 3000
+  - get back a URL like https://12345678.azhexgate.com.
+- Production‑grade security and reliability
+  - No inbound ports on the user’s machine.
+  - Encrypted tunnels end‑to‑end.
+  - Principle of least privilege in Azure.
+  - Logging/observability for debugging and auditing.
 
-• Production‑grade security and reliability• No inbound ports on the user’s machine.
-• Encrypted tunnels end‑to‑end.
-• Principle of least privilege in Azure.
-• Logging/observability for debugging and auditing.
+- Modular, testable design
+- Clear separation between client, gateway, management, and infra.
+- High unit and integration test coverage.
+- Infrastructure as code (Bicep) with CI validation.
 
-• Modular, testable design• Clear separation between client, gateway, management, and infra.
-• High unit and integration test coverage.
-• Infrastructure as code (Bicep) with CI validation.
-
-• Incremental evolution• Start with API key auth, later add OIDC.
-• Start with simple HTTP tunneling, later extend to WebSockets / other protocols.
+- Incremental evolution
+  - Start with API key auth, later add OIDC.
+  - Start with simple HTTP tunneling, later extend to WebSockets / other protocols.
 
 
 
 2.2 Non‑goals (for now)
 
-• Massive multi‑tenant SaaS product.
-• Non‑HTTP protocols (e.g. raw TCP) as first‑class citizens.
-• Highly complex access control models (RBAC, multi‑user orgs, etc.) in v0.
-
+- Massive multi‑tenant SaaS product.
+- Non‑HTTP protocols (e.g. raw TCP) as first‑class citizens.
+- Highly complex access control models (RBAC, multi‑user orgs, etc.) in v0.
 
 ---
 
@@ -64,26 +65,25 @@ Runs on the user’s machine, establishes the reverse tunnel to Azure, and forwa
 
 Responsibilities:
 
-• CLI entrypoint (azhexgate binary), providing commands like:• azhexgate start --port 3000
-• azhexgate stop
-• azhexgate status
-
-• Contact the Management API to request a new tunnel:• Ask for a random subdomain (e.g. 63873749).
-• Get back:• assigned subdomain (63873749.azhexgate.com)
-• Hybrid Connection name
-• Azure Relay endpoint
-• Listener SAS token (or equivalent credentials)
-• any session identifier / metadata.
-
-
-• Establish a Listener connection to the Azure Relay Hybrid Connection using the provided token.
-• Maintain a persistent, outbound connection to Relay:• handle reconnection and backoff
-• handle graceful shutdown.
-
-• Accept incoming tunnel streams from Relay:• forward them as HTTP requests to localhost:<port>
-• relay responses back to Relay for return to the caller.
-
-• Log local events and, optionally, send telemetry signals (e.g., connection status) to the management backend.
+- CLI entrypoint (azhexgate binary), providing commands like: 
+  - 'azhexgate start --port 3000'
+  - stop will be done by sending ctrl+c
+- Contact the Management API to request a new tunnel:
+  - Ask for a random subdomain (e.g. 63873749).
+  - Get back:
+    - assigned subdomain (63873749.azhexgate.com)
+    - Hybrid Connection name
+    - Azure Relay endpoint
+    - Listener SAS token (or equivalent credentials)
+    - any session identifier / metadata.
+- Establish a Listener connection to the Azure Relay Hybrid Connection using the provided token.
+- Maintain a persistent, outbound connection to Relay:
+  - handle reconnection and backoff
+  - handle graceful shutdown.
+- Accept incoming tunnel streams from Relay:
+  - forward them as HTTP requests to localhost:<port>
+  - relay responses back to Relay for return to the caller.
+- Log local events and, optionally, send telemetry signals (e.g., connection status) to the management backend.
 
 
 Key design points:
