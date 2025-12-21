@@ -634,9 +634,9 @@ At maturity, the repository will roughly follow:
 │   ├── config/             # Config parsing, env handling
 │   └── auth/               # Client-side auth helpers (API key handling)
 ├── gateway/                # Cloud gateway/management API implementation
-│   ├── main.go             # Minimal entry point (calls cmd.Execute())
-│   ├── cmd/                # Cobra command definitions
-│   │   └── root.go         # Root command
+│   ├── main.go             # Entry point
+│   ├── cmd/                # Cobra command definitions (future)
+│   │   └── root.go         # Root command (future)
 │   ├── http/               # HTTP server, routing, middleware
 │   ├── relay/              # Sender integration with Azure Relay
 │   ├── management/         # Management API handlers & logic
@@ -667,17 +667,19 @@ At maturity, the repository will roughly follow:
 
 #### 8.1.1 CLI Structure
 
-Both `client` and `gateway` use the [Cobra](https://github.com/spf13/cobra) library for CLI command structure:
+The `client` uses the [Cobra](https://github.com/spf13/cobra) library for CLI command structure:
 
 - `main.go`: Minimal entry point that calls `cmd.Execute()`
 - `cmd/root.go`: Defines the root command with common flags and configuration
-- `cmd/<subcommand>.go`: One file per subcommand (e.g., `start.go`, `serve.go`)
+- `cmd/<subcommand>.go`: One file per subcommand (e.g., `start.go`)
 
 This structure provides:
 - Consistent command-line interface patterns
 - Automatic help generation
 - Shell completion support
 - Easy extensibility for new commands
+
+The `gateway` currently has a simple entry point but will adopt the same Cobra structure as features are added.
 
 The binaries are built from:
 - `client/main.go` → `azhexgate` CLI binary
