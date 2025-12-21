@@ -1,11 +1,3 @@
-Here’s a first version of a detailed architecture doc you can drop in as:
-
-docs/architecture.md (or ARCHITECTURE.md at root).
-
-It’s written to be understandable for any engineer joining the project, and structured so you can easily point to sections when assigning tasks.
-
----
-
 AzHexGate Architecture
 
 1. Overview
