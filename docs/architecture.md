@@ -84,6 +84,7 @@ Key design points:
 - Runs entirely outbound (no firewall/NAT configuration needed).
 - Treats the local service as a black box HTTP/WebSocket server.
 - Should not require the user to know anything about Azure Relay.
+- Should be able to run on any OS (Windows, Mac, Linux)
 
 ---
 
@@ -454,7 +455,7 @@ Deny   All
 - Rules can be applied per‑path or per‑hostname if the gateway is configured to split endpoints internally.  
 - If using a single App Service for both public and management endpoints, the gateway must route requests internally so that restrictions apply only to management paths.
 
-### 7.5 Optional: Azure Front Door Integration
+### 7.5 Optional/Later: Azure Front Door Integration
 
 For enhanced security and global performance, Azure Front Door can be placed in front of the Cloud Gateway.
 
@@ -524,9 +525,11 @@ At maturity, the repository will roughly follow:
 
 Before merging:
 
-- Ensure `go test ./...` passes.
+- Ensure Unit tests passes.
+- Ensure binaries compiles.
 - Ensure Bicep templates build.
 - Ensure CI workflows remain green.
+- Ensure documentaions are properly updated if needed.
 
 ---
 
@@ -540,6 +543,5 @@ Planned or potential future features:
 - Web UI for managing tunnels.
 - Rate limiting and QoS controls + Front Door integration
 - Additional protocol support beyond HTTP.
-
 
 ---
