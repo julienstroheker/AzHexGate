@@ -71,10 +71,12 @@ func runServer(cmd *cobra.Command) error {
 
 		// Asking listener to shut down and shed load.
 		if err := server.Shutdown(ctx); err != nil {
-			if err := server.Close(); err != nil {
-				return fmt.Errorf("could not stop server gracefully: %w", err)
+			// If graceful shutdown fails, try to force close
+			shutdownErr := fmt.Errorf("could not gracefully shutdown the server: %w", err)
+			if closeErr := server.Close(); closeErr != nil {
+				return fmt.Errorf("%v; also failed to force close: %w", shutdownErr, closeErr)
 			}
-			return fmt.Errorf("could not gracefully shutdown the server: %w", err)
+			return shutdownErr
 		}
 
 		cmd.Println("Server stopped gracefully")
