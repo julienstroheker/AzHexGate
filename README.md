@@ -1,4 +1,4 @@
-LOGO
+![AzHexGate logo showing a glowing blue portal with gold accents at the center, connecting a laptop icon on the left and a cloud icon on the right via a bright blue line that passes through the portal and includes a padlock symbol. Below the graphic, the word ‘AzHexGate’ appears in bold, futuristic blue font. The background is dark blue, emphasizing the luminous and secure tunnel concept](./docs/AzHexGate.png)
 
 # AzHexGate
 
