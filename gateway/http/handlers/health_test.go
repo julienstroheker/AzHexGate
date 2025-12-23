@@ -90,4 +90,3 @@ func TestHealthHandlerIntegration(t *testing.T) {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
 	}
 }
-
