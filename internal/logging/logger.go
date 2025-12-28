@@ -1,11 +1,22 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"time"
+)
+
+// Format represents the output format for logs
+type Format int
+
+const (
+	// FormatConsole is human-readable console output
+	FormatConsole Format = iota
+	// FormatJSON is structured JSON output
+	FormatJSON
 )
 
 // Level represents a logging level
@@ -57,13 +68,24 @@ func ParseLevel(s string) Level {
 // Logger provides structured logging capabilities
 type Logger struct {
 	level  Level
+	format Format
 	output io.Writer
 }
 
-// New creates a new Logger with the specified level
+// New creates a new Logger with the specified level and console format
 func New(level Level) *Logger {
 	return &Logger{
 		level:  level,
+		format: FormatConsole,
+		output: os.Stdout,
+	}
+}
+
+// NewWithFormat creates a new Logger with the specified level and format
+func NewWithFormat(level Level, format Format) *Logger {
+	return &Logger{
+		level:  level,
+		format: format,
 		output: os.Stdout,
 	}
 }
@@ -72,6 +94,7 @@ func New(level Level) *Logger {
 func NewWithOutput(level Level, output io.Writer) *Logger {
 	return &Logger{
 		level:  level,
+		format: FormatConsole,
 		output: output,
 	}
 }
@@ -107,6 +130,15 @@ func (l *Logger) log(level Level, msg string, fields ...Field) {
 		return
 	}
 
+	if l.format == FormatJSON {
+		l.logJSON(level, msg, fields...)
+	} else {
+		l.logConsole(level, msg, fields...)
+	}
+}
+
+// logConsole outputs logs in human-readable console format
+func (l *Logger) logConsole(level Level, msg string, fields ...Field) {
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	levelStr := level.String()
 
@@ -132,6 +164,31 @@ func (l *Logger) log(level Level, msg string, fields ...Field) {
 
 	// Write to output
 	_, _ = fmt.Fprint(l.output, output.String())
+}
+
+// logJSON outputs logs in JSON format
+func (l *Logger) logJSON(level Level, msg string, fields ...Field) {
+	logEntry := map[string]any{
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"level":     level.String(),
+		"message":   msg,
+	}
+
+	// Add fields if present
+	if len(fields) > 0 {
+		for _, field := range fields {
+			logEntry[field.Key] = field.Value
+		}
+	}
+
+	jsonBytes, err := json.Marshal(logEntry)
+	if err != nil {
+		// Fallback to console output if JSON marshaling fails
+		l.logConsole(level, msg, fields...)
+		return
+	}
+
+	_, _ = fmt.Fprintf(l.output, "%s\n", jsonBytes)
 }
 
 // Field represents a structured logging field

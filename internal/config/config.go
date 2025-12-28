@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -49,39 +48,6 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
-}
-
-// GetInt retrieves an environment variable as an integer with a default fallback
-func GetInt(key string, defaultValue int) int {
-	val := os.Getenv(key)
-	if val == "" {
-		return defaultValue
-	}
-
-	intVal, err := strconv.Atoi(val)
-	if err != nil {
-		return defaultValue
-	}
-
-	return intVal
-}
-
-// GetBool retrieves an environment variable as a boolean with a default fallback
-// Truthy values: "true", "1", "yes", "on" (case-insensitive)
-func GetBool(key string, defaultValue bool) bool {
-	val := strings.ToLower(os.Getenv(key))
-	if val == "" {
-		return defaultValue
-	}
-
-	switch val {
-	case "true", "1", "yes", "on":
-		return true
-	case "false", "0", "no", "off":
-		return false
-	default:
-		return defaultValue
-	}
 }
 
 // getEnvOrDefault retrieves an environment variable or returns a default value

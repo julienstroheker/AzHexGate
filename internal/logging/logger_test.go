@@ -304,3 +304,44 @@ func TestLogger_OutputFormat(t *testing.T) {
 		t.Errorf("Expected message part 'test', got: %s", parts[2])
 	}
 }
+
+func TestLogger_JSONFormat(t *testing.T) {
+buf := &bytes.Buffer{}
+logger := &Logger{
+level:  InfoLevel,
+format: FormatJSON,
+output: buf,
+}
+
+logger.Info("test message", String("key", "value"))
+
+output := buf.String()
+if !strings.Contains(output, `"message":"test message"`) {
+t.Errorf("Expected JSON output to contain message field, got: %s", output)
+}
+if !strings.Contains(output, `"level":"INFO"`) {
+t.Errorf("Expected JSON output to contain level field, got: %s", output)
+}
+if !strings.Contains(output, `"key":"value"`) {
+t.Errorf("Expected JSON output to contain custom field, got: %s", output)
+}
+if !strings.Contains(output, `"timestamp"`) {
+t.Errorf("Expected JSON output to contain timestamp field, got: %s", output)
+}
+}
+
+func TestNewWithFormat(t *testing.T) {
+logger := NewWithFormat(InfoLevel, FormatJSON)
+
+if logger == nil {
+t.Fatal("Expected logger to be created")
+}
+
+if logger.level != InfoLevel {
+t.Errorf("Expected level InfoLevel, got: %v", logger.level)
+}
+
+if logger.format != FormatJSON {
+t.Errorf("Expected format FormatJSON, got: %v", logger.format)
+}
+}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/julienstroheker/AzHexGate/gateway/http"
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +28,7 @@ var startCmd = &cobra.Command{
 	Short: "Start the gateway HTTP server",
 	Long:  `Start the gateway HTTP server with health check endpoint`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runServer(cmd)
+		return runServer()
 	},
 }
 
@@ -38,8 +39,9 @@ func init() {
 		"Graceful shutdown timeout in seconds")
 }
 
-func runServer(cmd *cobra.Command) error {
-	cmd.Printf("Starting gateway server on port %d...\n", portFlag)
+func runServer() error {
+	log := GetLogger()
+	log.Info("Starting gateway server", logging.Int("port", portFlag))
 
 	// Create server
 	server := http.NewServer(portFlag)
@@ -49,7 +51,7 @@ func runServer(cmd *cobra.Command) error {
 
 	// Start the server
 	go func() {
-		cmd.Printf("Gateway listening on :%d\n", portFlag)
+		log.Info("Gateway listening", logging.Int("port", portFlag))
 		serverErrors <- server.ListenAndServe()
 	}()
 
@@ -63,7 +65,7 @@ func runServer(cmd *cobra.Command) error {
 		return fmt.Errorf("server error: %w", err)
 
 	case sig := <-shutdown:
-		cmd.Printf("\nReceived signal %v, starting graceful shutdown...\n", sig)
+		log.Info("Received shutdown signal", logging.String("signal", sig.String()))
 
 		// Give outstanding requests a deadline for completion.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(shutdownTimeoutFlag)*time.Second)
@@ -79,7 +81,7 @@ func runServer(cmd *cobra.Command) error {
 			return shutdownErr
 		}
 
-		cmd.Println("Server stopped gracefully")
+		log.Info("Server stopped gracefully")
 	}
 
 	return nil
