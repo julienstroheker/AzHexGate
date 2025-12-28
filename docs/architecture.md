@@ -714,8 +714,3 @@ Planned or potential future features:
 - Additional protocol support beyond HTTP.
 
 ---
-
-
-
-
-Keyvault not used to save/fetch relay key, can we use maanged identity and cache it in memory with some routine that check if the key has bee rotated or when there is a error reachig out to relay ?
