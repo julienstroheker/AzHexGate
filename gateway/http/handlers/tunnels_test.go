@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/julienstroheker/AzHexGate/internal/api"
 )
 
 func TestTunnelsHandlerPost(t *testing.T) {
@@ -32,7 +34,7 @@ func TestTunnelsHandlerPost(t *testing.T) {
 	}
 
 	// Parse response body
-	var response TunnelResponse
+	var response api.TunnelResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode response body: %v", err)
 	}
@@ -123,7 +125,7 @@ func TestTunnelsHandlerResponseFormat(t *testing.T) {
 	}()
 
 	// Verify JSON is valid
-	var response TunnelResponse
+	var response api.TunnelResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		t.Fatalf("Response is not valid JSON: %v", err)
 	}

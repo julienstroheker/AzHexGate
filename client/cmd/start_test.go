@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/julienstroheker/AzHexGate/internal/api"
 )
 
 func TestStartCommandWithMockAPI(t *testing.T) {
@@ -28,7 +30,7 @@ func TestStartCommandWithMockAPI(t *testing.T) {
 		}
 
 		// Return mock response
-		response := TunnelResponse{
+		response := api.TunnelResponse{
 			PublicURL:            "https://mock123.azhexgate.com",
 			RelayEndpoint:        "https://mock-relay.servicebus.windows.net",
 			HybridConnectionName: "hc-mock123",
@@ -75,7 +77,7 @@ func TestStartCommandWithMockAPI(t *testing.T) {
 func TestStartCommandWithCustomPort(t *testing.T) {
 	// Create mock API server
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := TunnelResponse{
+		response := api.TunnelResponse{
 			PublicURL:            "https://test456.azhexgate.com",
 			RelayEndpoint:        "https://test-relay.servicebus.windows.net",
 			HybridConnectionName: "hc-test456",
@@ -195,7 +197,7 @@ func TestStartCommandNetworkError(t *testing.T) {
 func TestCreateTunnelSuccess(t *testing.T) {
 	// Create mock API server
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := TunnelResponse{
+		response := api.TunnelResponse{
 			PublicURL:            "https://789.azhexgate.com",
 			RelayEndpoint:        "https://relay.servicebus.windows.net",
 			HybridConnectionName: "hc-789",
@@ -246,7 +248,7 @@ func TestCreateTunnelHTTPError(t *testing.T) {
 func TestVerboseFlag(t *testing.T) {
 	// Create mock API server
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := TunnelResponse{
+		response := api.TunnelResponse{
 			PublicURL:            "https://verbose.azhexgate.com",
 			RelayEndpoint:        "https://relay.servicebus.windows.net",
 			HybridConnectionName: "hc-verbose",

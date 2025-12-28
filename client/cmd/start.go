@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/julienstroheker/AzHexGate/internal/api"
 	"github.com/julienstroheker/AzHexGate/internal/logging"
 	"github.com/spf13/cobra"
 )
@@ -22,15 +23,6 @@ var (
 	portFlag   int
 	apiURLFlag string
 )
-
-// TunnelResponse represents the response from the Management API
-type TunnelResponse struct {
-	PublicURL            string `json:"public_url"`
-	RelayEndpoint        string `json:"relay_endpoint"`
-	HybridConnectionName string `json:"hybrid_connection_name"`
-	ListenerToken        string `json:"listener_token"`
-	SessionID            string `json:"session_id"`
-}
 
 var startCmd = &cobra.Command{
 	Use:   "start",
@@ -66,7 +58,7 @@ func init() {
 }
 
 // createTunnel calls the Management API to create a new tunnel
-func createTunnel(apiURL string, localPort int) (*TunnelResponse, error) {
+func createTunnel(apiURL string, localPort int) (*api.TunnelResponse, error) {
 	// Prepare request body
 	requestBody := map[string]interface{}{
 		"local_port": localPort,
@@ -106,7 +98,7 @@ func createTunnel(apiURL string, localPort int) (*TunnelResponse, error) {
 	}
 
 	// Parse response
-	var tunnelResp TunnelResponse
+	var tunnelResp api.TunnelResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tunnelResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
