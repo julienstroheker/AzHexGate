@@ -36,9 +36,6 @@ func TunnelsHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	// Encode and send response
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		// If encoding fails, we've already sent the status code
-		// Just log that encoding failed but don't try to change status
-		return
-	}
+	// Ignore encoding errors as status code is already written
+	_ = json.NewEncoder(w).Encode(response)
 }
