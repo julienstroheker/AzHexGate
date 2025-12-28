@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +14,9 @@ var startCmd = &cobra.Command{
 	Short: "Start the tunnel and forward traffic to localhost",
 	Long:  `Start the tunnel and forward traffic to localhost`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Printf("Starting tunnel on port %d...\n", portFlag)
+		log := GetLogger()
+		log.Info("Starting tunnel", logging.Int("port", portFlag))
+		log.Debug("Tunnel logic not yet implemented")
 		cmd.Println("Tunnel logic not yet implemented")
 	},
 }
