@@ -32,10 +32,14 @@ func TunnelsHandler(w http.ResponseWriter, r *http.Request) {
 		SessionID:            "mock-session-id",
 	}
 
+	// Marshal response to check for errors before writing status
+	data, err := json.Marshal(response)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-
-	// Encode and send response
-	// Ignore encoding errors as status code is already written
-	_ = json.NewEncoder(w).Encode(response)
+	_, _ = w.Write(data)
 }
