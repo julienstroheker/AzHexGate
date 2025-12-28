@@ -631,20 +631,20 @@ At maturity, the repository will roughly follow:
 │   │   ├── root.go         # Root command
 │   │   └── start.go        # Start subcommand
 │   ├── tunnel/             # Relay listener, forwarding
-│   ├── config/             # Config parsing, env handling
 │   └── auth/               # Client-side auth helpers (API key handling)
 ├── gateway/                # Cloud gateway/management API implementation
 │   ├── main.go             # Entry point
 │   ├── cmd/                # Cobra command definitions (future)
 │   │   └── root.go         # Root command (future)
-│   ├── http/               # HTTP server, routing, middleware
+│   ├── http/               # HTTP server, routing, handlers, middleware
 │   ├── relay/              # Sender integration with Azure Relay
-│   ├── management/         # Management API handlers & logic
+│   ├── management/         # Management API logic
 │   └── routing/            # Subdomain → tunnel resolution
 ├── internal/               # Shared libraries used by both client & gateway
 │   ├── logging/
 │   ├── telemetry/
 │   ├── azure/
+|   ├── config/
 │   └── util/
 ├── infra/
 │   ├── main.bicep
