@@ -137,7 +137,7 @@ func (l *Logger) log(level Level, msg string, fields ...Field) {
 // Field represents a structured logging field
 type Field struct {
 	Key   string
-	Value interface{}
+	Value any
 }
 
 // String creates a Field with a string value
@@ -161,6 +161,6 @@ func Error(err error) Field {
 }
 
 // Any creates a Field with any value
-func Any(key string, value interface{}) Field {
+func Any(key string, value any) Field {
 	return Field{Key: key, Value: value}
 }
