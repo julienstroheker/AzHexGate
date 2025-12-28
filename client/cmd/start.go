@@ -1,14 +1,10 @@
 package cmd
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
-	"github.com/julienstroheker/AzHexGate/internal/api"
+	clientapi "github.com/julienstroheker/AzHexGate/client/api"
 	"github.com/julienstroheker/AzHexGate/internal/logging"
 	"github.com/spf13/cobra"
 )
@@ -32,8 +28,16 @@ var startCmd = &cobra.Command{
 		log := GetLogger()
 		log.Info("Starting tunnel", logging.Int("port", portFlag))
 
+		// Create API client
+		apiClient := clientapi.NewClient(&clientapi.Options{
+			BaseURL:    apiURLFlag,
+			Timeout:    defaultAPITimeout,
+			MaxRetries: 3,
+			Logger:     log,
+		})
+
 		// Call Management API to create tunnel
-		tunnelResp, err := createTunnel(apiURLFlag, portFlag)
+		tunnelResp, err := apiClient.CreateTunnel(portFlag)
 		if err != nil {
 			return fmt.Errorf("failed to create tunnel: %w", err)
 		}
@@ -55,53 +59,4 @@ func init() {
 	rootCmd.AddCommand(startCmd)
 	startCmd.Flags().IntVarP(&portFlag, "port", "p", defaultPort, "Local port to forward traffic to")
 	startCmd.Flags().StringVar(&apiURLFlag, "api-url", defaultAPIURL, "Management API base URL")
-}
-
-// createTunnel calls the Management API to create a new tunnel
-func createTunnel(apiURL string, localPort int) (*api.TunnelResponse, error) {
-	// Prepare request body
-	requestBody := map[string]interface{}{
-		"local_port": localPort,
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: defaultAPITimeout,
-	}
-
-	// Make POST request to /api/tunnels
-	url := fmt.Sprintf("%s/api/tunnels", apiURL)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	// Check status code
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse response
-	var tunnelResp api.TunnelResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tunnelResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &tunnelResp, nil
 }

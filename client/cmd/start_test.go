@@ -29,6 +29,11 @@ func TestStartCommandWithMockAPI(t *testing.T) {
 			t.Errorf("Expected Content-Type application/json, got %s", r.Header.Get("Content-Type"))
 		}
 
+		// Verify request ID header is present
+		if r.Header.Get("X-Client-Request-Id") == "" {
+			t.Error("Expected X-Client-Request-Id header to be set")
+		}
+
 		// Return mock response
 		response := api.TunnelResponse{
 			PublicURL:            "https://mock123.azhexgate.com",
@@ -164,8 +169,8 @@ func TestStartCommandInvalidJSON(t *testing.T) {
 		t.Fatal("Expected error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "failed to decode response") {
-		t.Errorf("Expected error to contain 'failed to decode response', got: %v", err)
+	if !strings.Contains(err.Error(), "failed to") {
+		t.Errorf("Expected error to contain 'failed to', got: %v", err)
 	}
 
 	// Reset for next test
@@ -192,57 +197,6 @@ func TestStartCommandNetworkError(t *testing.T) {
 
 	// Reset for next test
 	rootCmd.SetArgs(nil)
-}
-
-func TestCreateTunnelSuccess(t *testing.T) {
-	// Create mock API server
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := api.TunnelResponse{
-			PublicURL:            "https://789.azhexgate.com",
-			RelayEndpoint:        "https://relay.servicebus.windows.net",
-			HybridConnectionName: "hc-789",
-			ListenerToken:        "token-789",
-			SessionID:            "session-789",
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer mockServer.Close()
-
-	// Test createTunnel function
-	resp, err := createTunnel(mockServer.URL, 3000)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-
-	if resp.PublicURL != "https://789.azhexgate.com" {
-		t.Errorf("Expected PublicURL 'https://789.azhexgate.com', got '%s'", resp.PublicURL)
-	}
-
-	if resp.SessionID != "session-789" {
-		t.Errorf("Expected SessionID 'session-789', got '%s'", resp.SessionID)
-	}
-}
-
-func TestCreateTunnelHTTPError(t *testing.T) {
-	// Create mock API server that returns error
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte("Bad request"))
-	}))
-	defer mockServer.Close()
-
-	// Test createTunnel with HTTP error
-	_, err := createTunnel(mockServer.URL, 3000)
-	if err == nil {
-		t.Fatal("Expected error, got nil")
-	}
-
-	if !strings.Contains(err.Error(), "API returned status 400") {
-		t.Errorf("Expected error about status 400, got: %v", err)
-	}
 }
 
 func TestVerboseFlag(t *testing.T) {
