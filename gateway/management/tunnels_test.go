@@ -79,8 +79,15 @@ func TestTunnelsHandlerPut(t *testing.T) {
 
 	TunnelsHandler(w, req)
 
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
+	resp := w.Result()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, resp.StatusCode)
 	}
 }
 
@@ -90,8 +97,15 @@ func TestTunnelsHandlerDelete(t *testing.T) {
 
 	TunnelsHandler(w, req)
 
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
+	resp := w.Result()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, resp.StatusCode)
 	}
 }
 
