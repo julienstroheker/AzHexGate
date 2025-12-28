@@ -26,8 +26,8 @@ CI expectations:
 
 Implementation guidance:
 - Follow the architecture’s separation of concerns:
-  - CLI logic stays in cmd/azhexgate and client/
-  - Gateway logic stays in cmd/gateway and gateway/
+  - CLI logic stays in client/
+  - Gateway logic stays in gateway/
   - Shared logic goes in internal/
 - Do not mix responsibilities across layers.
 
