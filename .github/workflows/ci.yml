@@ -89,10 +89,70 @@ jobs:
           go build -o gateway-server ./gateway
           echo "Build successful!"
       
-      - name: Test gateway binary
+      - name: Test gateway binary help
         run: |
-          echo "Testing gateway binary execution:"
-          ./gateway-server
+          echo "Testing gateway binary --help:"
+          ./gateway-server --help
+          echo ""
+          echo "Testing gateway start --help:"
+          ./gateway-server start --help
+      
+      - name: Test gateway server health endpoint
+        run: |
+          echo "Starting gateway server in background..."
+          ./gateway-server start --port 9999 &
+          GATEWAY_PID=$!
+          echo "Gateway PID: $GATEWAY_PID"
+          
+          # Wait for server to start
+          echo "Waiting for server to start..."
+          sleep 2
+          
+          # Test health endpoint
+          echo "Testing /healthz endpoint:"
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:9999/healthz)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n1)
+          
+          echo "HTTP Status Code: $HTTP_CODE"
+          echo "Response Body: $BODY"
+          
+          # Verify response
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Expected status code 200, got $HTTP_CODE"
+            kill $GATEWAY_PID
+            exit 1
+          fi
+          
+          if [ "$BODY" != "OK" ]; then
+            echo "ERROR: Expected response body 'OK', got '$BODY'"
+            kill $GATEWAY_PID
+            exit 1
+          fi
+          
+          echo "Health endpoint test passed!"
+          
+          # Test graceful shutdown
+          echo "Testing graceful shutdown..."
+          kill -TERM $GATEWAY_PID
+          
+          # Wait for process to exit
+          for i in {1..10}; do
+            if ! kill -0 $GATEWAY_PID 2>/dev/null; then
+              echo "Server stopped gracefully"
+              break
+            fi
+            sleep 1
+          done
+          
+          # Check if process is still running
+          if kill -0 $GATEWAY_PID 2>/dev/null; then
+            echo "ERROR: Server did not stop gracefully"
+            kill -9 $GATEWAY_PID
+            exit 1
+          fi
+          
+          echo "Graceful shutdown test passed!"
       
       - name: Run tests
         run: go test ./...

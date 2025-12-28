@@ -1,7 +1,7 @@
 package main
 
-import "fmt"
+import "github.com/julienstroheker/AzHexGate/gateway/cmd"
 
 func main() {
-	fmt.Println("gateway server - not yet implemented")
+	cmd.Execute()
 }

@@ -12,6 +12,7 @@
 /azhexgate
 /client/azhexgate
 /gateway/gateway
+/gateway-server
 
 # Test binary, built with `go test -c`
 *.test
