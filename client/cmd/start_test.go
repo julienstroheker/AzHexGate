@@ -2,13 +2,48 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-func TestStartCommand(t *testing.T) {
-	// Test start command with default port
-	rootCmd.SetArgs([]string{"start"})
+func TestStartCommandWithMockAPI(t *testing.T) {
+	// Create mock API server
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request method
+		if r.Method != http.MethodPost {
+			t.Errorf("Expected POST request, got %s", r.Method)
+		}
+
+		// Verify request path
+		if r.URL.Path != "/api/tunnels" {
+			t.Errorf("Expected path /api/tunnels, got %s", r.URL.Path)
+		}
+
+		// Verify content type
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Expected Content-Type application/json, got %s", r.Header.Get("Content-Type"))
+		}
+
+		// Return mock response
+		response := TunnelResponse{
+			PublicURL:            "https://mock123.azhexgate.com",
+			RelayEndpoint:        "https://mock-relay.servicebus.windows.net",
+			HybridConnectionName: "hc-mock123",
+			ListenerToken:        "mock-token",
+			SessionID:            "mock-session",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer mockServer.Close()
+
+	// Test start command with mock API
+	rootCmd.SetArgs([]string{"start", "--api-url", mockServer.URL})
 
 	// Capture output
 	buf := new(bytes.Buffer)
@@ -21,8 +56,16 @@ func TestStartCommand(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "Tunnel logic not yet implemented") {
-		t.Errorf("Expected output to contain message, got: %s", output)
+	if !strings.Contains(output, "Tunnel established") {
+		t.Errorf("Expected output to contain 'Tunnel established', got: %s", output)
+	}
+
+	if !strings.Contains(output, "https://mock123.azhexgate.com") {
+		t.Errorf("Expected output to contain mock URL, got: %s", output)
+	}
+
+	if !strings.Contains(output, "http://localhost:3000") {
+		t.Errorf("Expected output to contain local port, got: %s", output)
 	}
 
 	// Reset for next test
@@ -30,8 +73,24 @@ func TestStartCommand(t *testing.T) {
 }
 
 func TestStartCommandWithCustomPort(t *testing.T) {
+	// Create mock API server
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := TunnelResponse{
+			PublicURL:            "https://test456.azhexgate.com",
+			RelayEndpoint:        "https://test-relay.servicebus.windows.net",
+			HybridConnectionName: "hc-test456",
+			ListenerToken:        "test-token",
+			SessionID:            "test-session",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer mockServer.Close()
+
 	// Test start command with custom port
-	rootCmd.SetArgs([]string{"start", "--port", "8080"})
+	rootCmd.SetArgs([]string{"start", "--port", "8080", "--api-url", mockServer.URL})
 
 	// Capture output
 	buf := new(bytes.Buffer)
@@ -44,17 +103,24 @@ func TestStartCommandWithCustomPort(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "Tunnel logic not yet implemented") {
-		t.Errorf("Expected output to contain message, got: %s", output)
+	if !strings.Contains(output, "http://localhost:8080") {
+		t.Errorf("Expected output to contain custom port 8080, got: %s", output)
 	}
 
 	// Reset for next test
 	rootCmd.SetArgs(nil)
 }
 
-func TestStartCommandWithShortFlag(t *testing.T) {
-	// Test start command with short flag
-	rootCmd.SetArgs([]string{"start", "-p", "5000"})
+func TestStartCommandAPIError(t *testing.T) {
+	// Create mock API server that returns error
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("Internal server error"))
+	}))
+	defer mockServer.Close()
+
+	// Test start command with API error
+	rootCmd.SetArgs([]string{"start", "--api-url", mockServer.URL})
 
 	// Capture output
 	buf := new(bytes.Buffer)
@@ -62,22 +128,140 @@ func TestStartCommandWithShortFlag(t *testing.T) {
 	rootCmd.SetErr(buf)
 
 	err := rootCmd.Execute()
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
+	if err == nil {
+		t.Fatal("Expected error, got nil")
 	}
 
-	output := buf.String()
-	if !strings.Contains(output, "Tunnel logic not yet implemented") {
-		t.Errorf("Expected output to contain message, got: %s", output)
+	if !strings.Contains(err.Error(), "failed to create tunnel") {
+		t.Errorf("Expected error to contain 'failed to create tunnel', got: %v", err)
 	}
 
 	// Reset for next test
 	rootCmd.SetArgs(nil)
+}
+
+func TestStartCommandInvalidJSON(t *testing.T) {
+	// Create mock API server that returns invalid JSON
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("not valid json"))
+	}))
+	defer mockServer.Close()
+
+	// Test start command with invalid JSON
+	rootCmd.SetArgs([]string{"start", "--api-url", mockServer.URL})
+
+	// Capture output
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to decode response") {
+		t.Errorf("Expected error to contain 'failed to decode response', got: %v", err)
+	}
+
+	// Reset for next test
+	rootCmd.SetArgs(nil)
+}
+
+func TestStartCommandNetworkError(t *testing.T) {
+	// Test start command with unreachable API
+	rootCmd.SetArgs([]string{"start", "--api-url", "http://localhost:99999"})
+
+	// Capture output
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to") {
+		t.Errorf("Expected error to contain 'failed to', got: %v", err)
+	}
+
+	// Reset for next test
+	rootCmd.SetArgs(nil)
+}
+
+func TestCreateTunnelSuccess(t *testing.T) {
+	// Create mock API server
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := TunnelResponse{
+			PublicURL:            "https://789.azhexgate.com",
+			RelayEndpoint:        "https://relay.servicebus.windows.net",
+			HybridConnectionName: "hc-789",
+			ListenerToken:        "token-789",
+			SessionID:            "session-789",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer mockServer.Close()
+
+	// Test createTunnel function
+	resp, err := createTunnel(mockServer.URL, 3000)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if resp.PublicURL != "https://789.azhexgate.com" {
+		t.Errorf("Expected PublicURL 'https://789.azhexgate.com', got '%s'", resp.PublicURL)
+	}
+
+	if resp.SessionID != "session-789" {
+		t.Errorf("Expected SessionID 'session-789', got '%s'", resp.SessionID)
+	}
+}
+
+func TestCreateTunnelHTTPError(t *testing.T) {
+	// Create mock API server that returns error
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("Bad request"))
+	}))
+	defer mockServer.Close()
+
+	// Test createTunnel with HTTP error
+	_, err := createTunnel(mockServer.URL, 3000)
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "API returned status 400") {
+		t.Errorf("Expected error about status 400, got: %v", err)
+	}
 }
 
 func TestVerboseFlag(t *testing.T) {
+	// Create mock API server
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := TunnelResponse{
+			PublicURL:            "https://verbose.azhexgate.com",
+			RelayEndpoint:        "https://relay.servicebus.windows.net",
+			HybridConnectionName: "hc-verbose",
+			ListenerToken:        "verbose-token",
+			SessionID:            "verbose-session",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer mockServer.Close()
+
 	// Test verbose flag
-	rootCmd.SetArgs([]string{"start", "-v"})
+	rootCmd.SetArgs([]string{"start", "-v", "--api-url", mockServer.URL})
 
 	// Capture output
 	buf := new(bytes.Buffer)
