@@ -22,6 +22,9 @@ func NewServer(port int) *Server {
 	// Register health check endpoint
 	mux.HandleFunc("/healthz", handlers.HealthHandler)
 
+	// Register management API endpoints
+	mux.HandleFunc("/api/tunnels", handlers.TunnelsHandler)
+
 	return &Server{
 		server: &http.Server{
 			Addr:              fmt.Sprintf(":%d", port),
