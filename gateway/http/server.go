@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/julienstroheker/AzHexGate/gateway/http/handlers"
+	"github.com/julienstroheker/AzHexGate/gateway/management"
 )
 
 // Server represents the HTTP server
@@ -21,6 +22,9 @@ func NewServer(port int) *Server {
 
 	// Register health check endpoint
 	mux.HandleFunc("/healthz", handlers.HealthHandler)
+
+	// Register management API endpoints
+	mux.HandleFunc("/api/tunnels", management.TunnelsHandler)
 
 	return &Server{
 		server: &http.Server{
