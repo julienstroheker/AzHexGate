@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -71,11 +72,16 @@ func NewClient(opts *Options) *Client {
 	}
 }
 
+// CreateTunnelRequest represents the request to create a new tunnel
+type CreateTunnelRequest struct {
+	LocalPort int `json:"local_port"`
+}
+
 // CreateTunnel requests a new tunnel from the Gateway API
-func (c *Client) CreateTunnel(localPort int) (*api.TunnelResponse, error) {
+func (c *Client) CreateTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error) {
 	// Prepare request body
-	requestBody := map[string]interface{}{
-		"local_port": localPort,
+	requestBody := CreateTunnelRequest{
+		LocalPort: localPort,
 	}
 
 	bodyBytes, err := json.Marshal(requestBody)
@@ -83,9 +89,9 @@ func (c *Client) CreateTunnel(localPort int) (*api.TunnelResponse, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create request with bytes.NewReader to allow retries
+	// Create request with context and bytes.NewReader to allow retries
 	url := fmt.Sprintf("%s/api/tunnels", c.baseURL)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

@@ -4,6 +4,8 @@ import (
 	"net/http"
 )
 
+const defaultUserAgent = "azhexgate-client/1.0"
+
 // UserAgentPolicy adds a User-Agent header to requests
 type UserAgentPolicy struct {
 	userAgent string
@@ -12,7 +14,7 @@ type UserAgentPolicy struct {
 // NewUserAgentPolicy creates a new UserAgentPolicy
 func NewUserAgentPolicy(userAgent string) *UserAgentPolicy {
 	if userAgent == "" {
-		userAgent = "azhexgate-client/1.0"
+		userAgent = defaultUserAgent
 	}
 	return &UserAgentPolicy{userAgent: userAgent}
 }

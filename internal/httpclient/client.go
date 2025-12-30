@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -43,7 +44,7 @@ func DefaultOptions() *Options {
 		Timeout:    30 * time.Second,
 		MaxRetries: 3,
 		RetryDelay: time.Second,
-		UserAgent:  "azhexgate-client/1.0",
+		UserAgent:  defaultUserAgent,
 	}
 }
 
@@ -127,8 +128,8 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 }
 
 // Get is a convenience method for GET requests
-func (c *Client) Get(url string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func (c *Client) Get(ctx context.Context, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +137,8 @@ func (c *Client) Get(url string) (*http.Response, error) {
 }
 
 // Post is a convenience method for POST requests
-func (c *Client) Post(url, contentType string, body interface{}) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodPost, url, nil)
+func (c *Client) Post(ctx context.Context, url, contentType string, body interface{}) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -67,7 +68,8 @@ func TestCreateTunnelSuccess(t *testing.T) {
 	}
 	client := NewClient(opts)
 
-	resp, err := client.CreateTunnel(3000)
+	ctx := context.Background()
+	resp, err := client.CreateTunnel(ctx, 3000)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -91,7 +93,8 @@ func TestCreateTunnelHTTPError(t *testing.T) {
 	}
 	client := NewClient(opts)
 
-	_, err := client.CreateTunnel(3000)
+	ctx := context.Background()
+	_, err := client.CreateTunnel(ctx, 3000)
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
@@ -115,7 +118,8 @@ func TestCreateTunnelInvalidJSON(t *testing.T) {
 	}
 	client := NewClient(opts)
 
-	_, err := client.CreateTunnel(3000)
+	ctx := context.Background()
+	_, err := client.CreateTunnel(ctx, 3000)
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
@@ -158,7 +162,8 @@ func TestCreateTunnelWithMockTransport(t *testing.T) {
 		httpClient: httpClient,
 	}
 
-	resp, err := apiClient.CreateTunnel(3000)
+	ctx := context.Background()
+	resp, err := apiClient.CreateTunnel(ctx, 3000)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}

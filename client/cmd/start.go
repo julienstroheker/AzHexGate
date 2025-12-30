@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/julienstroheker/AzHexGate/client/gateway"
@@ -27,13 +28,14 @@ var startCmd = &cobra.Command{
 		log.Info("Starting tunnel", logging.Int("port", portFlag))
 
 		// Create Gateway API client with only overrides
-		apiClient := gateway.NewClient(&gateway.Options{
+		gatewayClient := gateway.NewClient(&gateway.Options{
 			BaseURL: apiURLFlag,
 			Logger:  log,
 		})
 
-		// Call Gateway API to create tunnel
-		tunnelResp, err := apiClient.CreateTunnel(portFlag)
+		// Call Gateway API to create tunnel with context
+		ctx := context.Background()
+		tunnelResp, err := gatewayClient.CreateTunnel(ctx, portFlag)
 		if err != nil {
 			return fmt.Errorf("failed to create tunnel: %w", err)
 		}
