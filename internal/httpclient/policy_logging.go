@@ -138,7 +138,7 @@ func (p *LoggingPolicy) formatHeaders(key string, headers http.Header) logging.F
 	var headerStrings []string
 	for name, values := range headers {
 		value := strings.Join(values, ", ")
-		
+
 		// Check if this header should be redacted
 		shouldRedact := false
 		for _, filter := range p.headerFilters {
@@ -163,7 +163,7 @@ func (p *LoggingPolicy) readAndRestoreBody(req *http.Request) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Restore the body for the next policy
 	req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	return bodyBytes, nil
@@ -175,7 +175,7 @@ func (p *LoggingPolicy) readAndRestoreResponseBody(resp *http.Response) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Restore the body for the caller
 	resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	return bodyBytes, nil

@@ -56,7 +56,7 @@ func TestErrorPolicyDoWithError(t *testing.T) {
 			_ = resp.Body.Close()
 		}()
 	}
-	
+
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
@@ -87,7 +87,7 @@ func TestErrorPolicyDoWrapsError(t *testing.T) {
 			_ = resp.Body.Close()
 		}()
 	}
-	
+
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
@@ -117,7 +117,7 @@ func TestErrorPolicyPreservesErrorChain(t *testing.T) {
 			_ = resp.Body.Close()
 		}()
 	}
-	
+
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}

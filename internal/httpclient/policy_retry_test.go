@@ -31,7 +31,7 @@ func TestNewRetryPolicyWithOptions(t *testing.T) {
 		RetryStatusCodes: []int{500, 503},
 	}
 	policy := NewRetryPolicy(opts)
-	
+
 	if policy.maxRetries != 5 {
 		t.Errorf("Expected maxRetries 5, got %d", policy.maxRetries)
 	}
@@ -173,7 +173,7 @@ func TestRetryPolicyCustomStatusCodes(t *testing.T) {
 			_ = resp.Body.Close()
 		}()
 	}
-	
+
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -269,8 +269,8 @@ func TestShouldRetry(t *testing.T) {
 	policy := NewRetryPolicy(nil)
 
 	tests := []struct {
-		name       string
-		statusCode int
+		name        string
+		statusCode  int
 		shouldRetry bool
 	}{
 		{"nil response", 0, true},
@@ -289,7 +289,7 @@ func TestShouldRetry(t *testing.T) {
 			if tt.statusCode > 0 {
 				resp = &http.Response{StatusCode: tt.statusCode}
 			}
-			
+
 			result := policy.shouldRetry(resp)
 			if result != tt.shouldRetry {
 				t.Errorf("shouldRetry(%d) = %v, want %v", tt.statusCode, result, tt.shouldRetry)
