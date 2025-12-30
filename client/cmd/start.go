@@ -2,17 +2,15 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
-	clientapi "github.com/julienstroheker/AzHexGate/client/api"
+	"github.com/julienstroheker/AzHexGate/client/gateway"
 	"github.com/julienstroheker/AzHexGate/internal/logging"
 	"github.com/spf13/cobra"
 )
 
 const (
-	defaultPort       = 3000
-	defaultAPIURL     = "http://localhost:8080"
-	defaultAPITimeout = 30 * time.Second
+	defaultPort   = 3000
+	defaultAPIURL = "http://localhost:8080"
 )
 
 var (
@@ -28,15 +26,13 @@ var startCmd = &cobra.Command{
 		log := GetLogger()
 		log.Info("Starting tunnel", logging.Int("port", portFlag))
 
-		// Create API client
-		apiClient := clientapi.NewClient(&clientapi.Options{
-			BaseURL:    apiURLFlag,
-			Timeout:    defaultAPITimeout,
-			MaxRetries: 3,
-			Logger:     log,
+		// Create Gateway API client with only overrides
+		apiClient := gateway.NewClient(&gateway.Options{
+			BaseURL: apiURLFlag,
+			Logger:  log,
 		})
 
-		// Call Management API to create tunnel
+		// Call Gateway API to create tunnel
 		tunnelResp, err := apiClient.CreateTunnel(portFlag)
 		if err != nil {
 			return fmt.Errorf("failed to create tunnel: %w", err)
@@ -58,5 +54,5 @@ var startCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(startCmd)
 	startCmd.Flags().IntVarP(&portFlag, "port", "p", defaultPort, "Local port to forward traffic to")
-	startCmd.Flags().StringVar(&apiURLFlag, "api-url", defaultAPIURL, "Management API base URL")
+	startCmd.Flags().StringVar(&apiURLFlag, "api-url", defaultAPIURL, "Gateway API base URL")
 }

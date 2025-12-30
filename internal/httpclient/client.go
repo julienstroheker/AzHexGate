@@ -76,12 +76,16 @@ func NewClient(opts *Options) *Client {
 
 	// Retry policy
 	if opts.MaxRetries > 0 {
-		policies = append(policies, NewRetryPolicy(opts.MaxRetries, opts.RetryDelay))
+		policies = append(policies, NewRetryPolicy(&RetryOptions{
+			MaxRetries: opts.MaxRetries,
+			RetryDelay: opts.RetryDelay,
+			Logger:     opts.Logger,
+		}))
 	}
 
-	// Logging policy
+	// Logging policy (only if logger is provided)
 	if opts.Logger != nil {
-		policies = append(policies, NewLoggingPolicy(opts.Logger))
+		policies = append(policies, NewLoggingPolicy(opts.Logger, nil))
 	}
 
 	// Request ID policy

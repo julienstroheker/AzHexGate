@@ -1,4 +1,4 @@
-package api
+package gateway
 
 import (
 	"encoding/json"
@@ -86,7 +86,8 @@ func TestCreateTunnelHTTPError(t *testing.T) {
 	defer server.Close()
 
 	opts := &Options{
-		BaseURL: server.URL,
+		BaseURL:    server.URL,
+		MaxRetries: 0, // Disable retries for this test
 	}
 	client := NewClient(opts)
 
