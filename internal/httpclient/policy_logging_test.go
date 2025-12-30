@@ -14,7 +14,7 @@ import (
 func TestNewLoggingPolicy(t *testing.T) {
 	logger := logging.New(logging.DebugLevel)
 	policy := NewLoggingPolicy(logger, nil)
-	
+
 	if policy == nil {
 		t.Fatal("Expected non-nil policy")
 	}
@@ -32,7 +32,7 @@ func TestLoggingPolicyWithOptions(t *testing.T) {
 		HeaderFilters: []string{"Authorization"},
 	}
 	policy := NewLoggingPolicy(logger, opts)
-	
+
 	if !policy.logHeaders {
 		t.Error("Expected logHeaders to be true")
 	}
@@ -54,7 +54,9 @@ func TestLoggingPolicyDo(t *testing.T) {
 	}))
 	defer server.Close()
 
-	logger := logging.New(logging.DebugLevel)
+	// Use buffer to capture log output
+	var logBuf bytes.Buffer
+	logger := logging.NewWithOutput(logging.DebugLevel, &logBuf)
 	policy := NewLoggingPolicy(logger, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, server.URL, nil)
@@ -74,6 +76,21 @@ func TestLoggingPolicyDo(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", resp.StatusCode)
 	}
+
+	// Verify log output contains expected messages
+	logOutput := logBuf.String()
+	if !strings.Contains(logOutput, "HTTP Request") {
+		t.Error("Expected log output to contain 'HTTP Request'")
+	}
+	if !strings.Contains(logOutput, "HTTP Response") {
+		t.Error("Expected log output to contain 'HTTP Response'")
+	}
+	if !strings.Contains(logOutput, "method=GET") {
+		t.Error("Expected log output to contain 'method=GET'")
+	}
+	if !strings.Contains(logOutput, "status=200") {
+		t.Error("Expected log output to contain 'status=200'")
+	}
 }
 
 func TestLoggingPolicyWithHeaders(t *testing.T) {
@@ -83,7 +100,9 @@ func TestLoggingPolicyWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	logger := logging.New(logging.DebugLevel)
+	// Use buffer to capture log output
+	var logBuf bytes.Buffer
+	logger := logging.NewWithOutput(logging.DebugLevel, &logBuf)
 	opts := &LoggingOptions{
 		LogHeaders: true,
 	}
@@ -103,6 +122,15 @@ func TestLoggingPolicyWithHeaders(t *testing.T) {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
+
+	// Verify log output contains headers
+	logOutput := logBuf.String()
+	if !strings.Contains(logOutput, "request_headers=") {
+		t.Error("Expected log output to contain request_headers")
+	}
+	if !strings.Contains(logOutput, "response_headers=") {
+		t.Error("Expected log output to contain response_headers")
+	}
 }
 
 func TestLoggingPolicyWithBody(t *testing.T) {
@@ -112,7 +140,9 @@ func TestLoggingPolicyWithBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	logger := logging.New(logging.DebugLevel)
+	// Use buffer to capture log output
+	var logBuf bytes.Buffer
+	logger := logging.NewWithOutput(logging.DebugLevel, &logBuf)
 	opts := &LoggingOptions{
 		LogBody: true,
 	}
@@ -138,6 +168,21 @@ func TestLoggingPolicyWithBody(t *testing.T) {
 	if string(body) != "response body content" {
 		t.Errorf("Expected response body to be readable, got: %s", string(body))
 	}
+
+	// Verify log output contains body information
+	logOutput := logBuf.String()
+	if !strings.Contains(logOutput, "request_body=") {
+		t.Error("Expected log output to contain request_body")
+	}
+	if !strings.Contains(logOutput, "response_body=") {
+		t.Error("Expected log output to contain response_body")
+	}
+	if !strings.Contains(logOutput, "request body content") {
+		t.Error("Expected log output to contain request body content")
+	}
+	if !strings.Contains(logOutput, "response body content") {
+		t.Error("Expected log output to contain response body content")
+	}
 }
 
 func TestLoggingPolicyRedactBody(t *testing.T) {
@@ -147,7 +192,9 @@ func TestLoggingPolicyRedactBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	logger := logging.New(logging.DebugLevel)
+	// Use buffer to capture log output
+	var logBuf bytes.Buffer
+	logger := logging.NewWithOutput(logging.DebugLevel, &logBuf)
 	opts := &LoggingOptions{
 		LogBody:    true,
 		RedactBody: true,
@@ -167,6 +214,18 @@ func TestLoggingPolicyRedactBody(t *testing.T) {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
+
+	// Verify log output contains redacted body (size only)
+	logOutput := logBuf.String()
+	if strings.Contains(logOutput, "sensitive data") {
+		t.Error("Expected body content to be redacted, but found 'sensitive data'")
+	}
+	if !strings.Contains(logOutput, "response_body_size=") {
+		t.Error("Expected log output to contain 'response_body_size='")
+	}
+	if !strings.Contains(logOutput, "bytes") {
+		t.Error("Expected log output to contain 'bytes'")
+	}
 }
 
 func TestLoggingPolicyHeaderFilters(t *testing.T) {
@@ -175,10 +234,12 @@ func TestLoggingPolicyHeaderFilters(t *testing.T) {
 	}))
 	defer server.Close()
 
-	logger := logging.New(logging.DebugLevel)
+	// Use buffer to capture log output
+	var logBuf bytes.Buffer
+	logger := logging.NewWithOutput(logging.DebugLevel, &logBuf)
 	opts := &LoggingOptions{
 		LogHeaders:    true,
-		HeaderFilters: []string{"Authorization", "X-API-Key"},
+		HeaderFilters: []string{"Authorization", "X-Api-Key"},
 	}
 	policy := NewLoggingPolicy(logger, opts)
 
@@ -198,21 +259,37 @@ func TestLoggingPolicyHeaderFilters(t *testing.T) {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
+
+	// Verify log output contains redacted headers
+	logOutput := logBuf.String()
+	if strings.Contains(logOutput, "secret-token") {
+		t.Error("Expected Authorization header to be redacted, but found secret-token")
+	}
+	if strings.Contains(logOutput, "secret-key") {
+		t.Error("Expected X-Api-Key header to be redacted, but found secret-key")
+	}
+	if !strings.Contains(logOutput, "[REDACTED]") {
+		t.Error("Expected log output to contain '[REDACTED]'")
+	}
+	if !strings.Contains(logOutput, "public-value") {
+		t.Error("Expected public header value to be visible")
+	}
 }
 
 func TestLoggingPolicyFormatHeaders(t *testing.T) {
-	logger := logging.New(logging.DebugLevel)
+	var logBuf bytes.Buffer
+	logger := logging.NewWithOutput(logging.DebugLevel, &logBuf)
 	opts := &LoggingOptions{
 		HeaderFilters: []string{"Authorization"},
 	}
 	policy := NewLoggingPolicy(logger, opts)
 
 	headers := http.Header{}
-	headers.Set("Authorization", "Bearer secret")
+	headers.Set("Authorization", "Bearer token")
 	headers.Set("Content-Type", "application/json")
 
 	field := policy.formatHeaders("test_headers", headers)
-	
+
 	if field.Key != "test_headers" {
 		t.Errorf("Expected key 'test_headers', got '%s'", field.Key)
 	}

@@ -1,8 +1,10 @@
 package httpclient
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -227,7 +229,9 @@ func TestRetryPolicyWithLogger(t *testing.T) {
 	}))
 	defer server.Close()
 
-	logger := logging.New(logging.DebugLevel)
+	// Use buffer to capture log output
+	var logBuf bytes.Buffer
+	logger := logging.NewWithOutput(logging.DebugLevel, &logBuf)
 	opts := &RetryOptions{
 		MaxRetries: 2,
 		RetryDelay: 10 * time.Millisecond,
@@ -247,6 +251,18 @@ func TestRetryPolicyWithLogger(t *testing.T) {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
+
+	// Verify log output contains retry message
+	logOutput := logBuf.String()
+	if !strings.Contains(logOutput, "Retrying request") {
+		t.Error("Expected log output to contain 'Retrying request'")
+	}
+	if !strings.Contains(logOutput, "attempt=1") {
+		t.Error("Expected log output to contain 'attempt=1'")
+	}
+	if !strings.Contains(logOutput, "max_retries=2") {
+		t.Error("Expected log output to contain 'max_retries=2'")
+	}
 }
 
 func TestShouldRetry(t *testing.T) {
