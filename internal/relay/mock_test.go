@@ -237,7 +237,10 @@ func TestEndToEnd_Communication(t *testing.T) {
 	}
 
 	// Listener reads from connection (they share the same connection)
-	mockConn := listenerConn.(*MockConnection)
+	mockConn, ok := listenerConn.(*MockConnection)
+	if !ok {
+		t.Fatal("Expected connection to be *MockConnection")
+	}
 	receivedData := mockConn.GetWrittenData()
 	if string(receivedData) != testMessage {
 		t.Errorf("Expected to receive %q, got %q", testMessage, string(receivedData))
