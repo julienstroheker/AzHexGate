@@ -18,6 +18,16 @@ func TestNewRequestIDPolicy(t *testing.T) {
 	}
 }
 
+func TestNewDefaultRequestIDPolicy(t *testing.T) {
+	policy := NewDefaultRequestIDPolicy()
+	if policy == nil {
+		t.Fatal("Expected non-nil policy")
+	}
+	if policy.headerName != "X-Client-Request-Id" {
+		t.Errorf("Expected default header name 'X-Client-Request-Id', got '%s'", policy.headerName)
+	}
+}
+
 func TestNewRequestIDPolicyCustomHeader(t *testing.T) {
 	policy := NewRequestIDPolicy("X-Custom-Request-Id")
 	if policy.headerName != "X-Custom-Request-Id" {

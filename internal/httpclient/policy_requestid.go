@@ -6,17 +6,24 @@ import (
 	"github.com/google/uuid"
 )
 
+const defaultRequestIDHeader = "X-Client-Request-Id"
+
 // RequestIDPolicy adds a unique request ID to each request
 type RequestIDPolicy struct {
 	headerName string
 }
 
-// NewRequestIDPolicy creates a new RequestIDPolicy
+// NewRequestIDPolicy creates a new RequestIDPolicy with a custom header name
 func NewRequestIDPolicy(headerName string) *RequestIDPolicy {
 	if headerName == "" {
-		headerName = "X-Client-Request-Id"
+		headerName = defaultRequestIDHeader
 	}
 	return &RequestIDPolicy{headerName: headerName}
+}
+
+// NewDefaultRequestIDPolicy creates a new RequestIDPolicy with the default header name
+func NewDefaultRequestIDPolicy() *RequestIDPolicy {
+	return &RequestIDPolicy{headerName: defaultRequestIDHeader}
 }
 
 // Do implements Policy interface

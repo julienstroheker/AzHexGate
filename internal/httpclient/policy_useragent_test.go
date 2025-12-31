@@ -3,6 +3,7 @@ package httpclient
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -11,8 +12,12 @@ func TestNewUserAgentPolicy(t *testing.T) {
 	if policy == nil {
 		t.Fatal("Expected non-nil policy")
 	}
-	if policy.userAgent != "azhexgate-client/1.0" {
-		t.Errorf("Expected default userAgent 'azhexgate-client/1.0', got '%s'", policy.userAgent)
+	// Check that it contains the base client name and runtime info
+	if !strings.Contains(policy.userAgent, "azhexgate-client/1.0") {
+		t.Errorf("Expected default userAgent to contain 'azhexgate-client/1.0', got '%s'", policy.userAgent)
+	}
+	if !strings.Contains(policy.userAgent, "Go/") {
+		t.Errorf("Expected default userAgent to contain Go version, got '%s'", policy.userAgent)
 	}
 }
 
@@ -57,8 +62,12 @@ func TestUserAgentPolicyDo(t *testing.T) {
 func TestUserAgentPolicyDefault(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userAgent := r.Header.Get("User-Agent")
-		if userAgent != "azhexgate-client/1.0" {
-			t.Errorf("Expected default User-Agent 'azhexgate-client/1.0', got '%s'", userAgent)
+		// Check that it contains the base client name and runtime info
+		if !strings.Contains(userAgent, "azhexgate-client/1.0") {
+			t.Errorf("Expected default User-Agent to contain 'azhexgate-client/1.0', got '%s'", userAgent)
+		}
+		if !strings.Contains(userAgent, "Go/") {
+			t.Errorf("Expected default User-Agent to contain Go version, got '%s'", userAgent)
 		}
 		w.WriteHeader(http.StatusOK)
 	}))

@@ -18,6 +18,7 @@ import (
 type Client struct {
 	baseURL    string
 	httpClient *httpclient.Client
+	logger     *logging.Logger
 }
 
 // Options contains configuration for the Gateway API client
@@ -69,6 +70,7 @@ func NewClient(opts *Options) *Client {
 	return &Client{
 		baseURL:    baseURL,
 		httpClient: httpclient.NewClient(httpOpts),
+		logger:     opts.Logger,
 	}
 }
 
@@ -79,6 +81,11 @@ type CreateTunnelRequest struct {
 
 // CreateTunnel requests a new tunnel from the Gateway API
 func (c *Client) CreateTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error) {
+	// Log entry
+	if c.logger != nil {
+		c.logger.Info("Creating tunnel", logging.Int("local_port", localPort))
+	}
+
 	// Prepare request body
 	requestBody := CreateTunnelRequest{
 		LocalPort: localPort,

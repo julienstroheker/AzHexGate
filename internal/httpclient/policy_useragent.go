@@ -1,10 +1,12 @@
 package httpclient
 
 import (
+	"fmt"
 	"net/http"
+	"runtime"
 )
 
-const defaultUserAgent = "azhexgate-client/1.0"
+var defaultUserAgent = fmt.Sprintf("azhexgate-client/1.0 (Go/%s; %s/%s)", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
 // UserAgentPolicy adds a User-Agent header to requests
 type UserAgentPolicy struct {

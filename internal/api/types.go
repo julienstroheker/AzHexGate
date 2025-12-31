@@ -1,6 +1,6 @@
 package api
 
-// TunnelResponse represents the response from the Management API tunnel creation endpoint
+// TunnelResponse represents the response from the Gateway API tunnel creation endpoint
 type TunnelResponse struct {
 	PublicURL            string `json:"public_url"`
 	RelayEndpoint        string `json:"relay_endpoint"`

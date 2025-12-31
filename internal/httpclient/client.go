@@ -86,11 +86,14 @@ func NewClient(opts *Options) *Client {
 
 	// Logging policy (only if logger is provided)
 	if opts.Logger != nil {
-		policies = append(policies, NewLoggingPolicy(opts.Logger, nil))
+		policies = append(policies, NewLoggingPolicy(opts.Logger, &LoggingOptions{
+			LogHeaders: true,
+			LogBody:    true,
+		}))
 	}
 
 	// Request ID policy
-	policies = append(policies, NewRequestIDPolicy("X-Client-Request-Id"))
+	policies = append(policies, NewDefaultRequestIDPolicy())
 
 	// User Agent policy
 	if opts.UserAgent != "" {
