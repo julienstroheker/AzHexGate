@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/julienstroheker/AzHexGate/gateway/http"
+	"github.com/julienstroheker/AzHexGate/gateway/tunnel"
+	"github.com/julienstroheker/AzHexGate/internal/config"
 	"github.com/julienstroheker/AzHexGate/internal/logging"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +23,7 @@ const (
 var (
 	portFlag            int
 	shutdownTimeoutFlag int
+	modeFlag            string
 )
 
 var startCmd = &cobra.Command{
@@ -37,14 +40,34 @@ func init() {
 	startCmd.Flags().IntVarP(&portFlag, "port", "p", defaultPort, "Port to listen on")
 	startCmd.Flags().IntVar(&shutdownTimeoutFlag, "shutdown-timeout", defaultShutdownTimeout,
 		"Graceful shutdown timeout in seconds")
+	startCmd.Flags().StringVar(&modeFlag, "mode", string(config.ModeRemote),
+		"Operation mode: local or remote")
 }
 
 func runServer() error {
 	log := GetLogger()
-	log.Info("Starting gateway server", logging.Int("port", portFlag))
 
-	// Create server
-	server := http.NewServer(portFlag)
+	// Parse and validate mode
+	mode := config.Mode(modeFlag)
+	if !mode.IsValid() {
+		return fmt.Errorf("invalid mode: %s (must be 'local' or 'remote')", modeFlag)
+	}
+
+	log.Info("Starting gateway server",
+		logging.Int("port", portFlag),
+		logging.String("mode", mode.String()))
+
+	// Create tunnel manager with mode
+	manager := tunnel.NewManager(&tunnel.Options{
+		Mode:   mode,
+		Logger: log,
+	})
+
+	// Create server with manager
+	server := http.NewServer(&http.Options{
+		Port:    portFlag,
+		Manager: manager,
+	})
 
 	// Channel to listen for errors coming from the listener.
 	serverErrors := make(chan error, 1)

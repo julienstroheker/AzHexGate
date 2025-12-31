@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/julienstroheker/AzHexGate/internal/api"
+	"github.com/julienstroheker/AzHexGate/internal/config"
 	"github.com/julienstroheker/AzHexGate/internal/httpclient"
 )
 
@@ -160,6 +161,7 @@ func TestCreateTunnelWithMockTransport(t *testing.T) {
 	apiClient := &Client{
 		baseURL:    "http://example.com",
 		httpClient: httpClient,
+		mode:       config.ModeRemote, // Set mode explicitly
 	}
 
 	ctx := context.Background()

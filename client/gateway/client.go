@@ -9,9 +9,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/julienstroheker/AzHexGate/internal/api"
+	"github.com/julienstroheker/AzHexGate/internal/config"
 	"github.com/julienstroheker/AzHexGate/internal/httpclient"
 	"github.com/julienstroheker/AzHexGate/internal/logging"
+	"github.com/julienstroheker/AzHexGate/internal/relay"
 )
 
 // Client provides methods to interact with the Gateway API
@@ -19,6 +22,8 @@ type Client struct {
 	baseURL    string
 	httpClient *httpclient.Client
 	logger     *logging.Logger
+	mode       config.Mode
+	listener   relay.Listener
 }
 
 // Options contains configuration for the Gateway API client
@@ -34,6 +39,9 @@ type Options struct {
 
 	// Logger is used for debug logging (optional)
 	Logger *logging.Logger
+
+	// Mode is the operational mode (optional, defaults to remote)
+	Mode config.Mode
 }
 
 // NewClient creates a new Gateway API client
@@ -58,6 +66,11 @@ func NewClient(opts *Options) *Client {
 		maxRetries = 3
 	}
 
+	mode := opts.Mode
+	if mode == "" {
+		mode = config.ModeRemote
+	}
+
 	// Create HTTP client with policies
 	httpOpts := &httpclient.Options{
 		Timeout:    timeout,
@@ -71,6 +84,7 @@ func NewClient(opts *Options) *Client {
 		baseURL:    baseURL,
 		httpClient: httpclient.NewClient(httpOpts),
 		logger:     opts.Logger,
+		mode:       mode,
 	}
 }
 
@@ -81,6 +95,40 @@ type CreateTunnelRequest struct {
 
 // CreateTunnel requests a new tunnel from the Gateway API
 func (c *Client) CreateTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error) {
+	switch c.mode {
+	case config.ModeLocal:
+		return c.createLocalTunnel(ctx, localPort)
+	case config.ModeRemote:
+		return c.createRemoteTunnel(ctx, localPort)
+	default:
+		return nil, fmt.Errorf("unsupported mode: %s", c.mode)
+	}
+}
+
+// createLocalTunnel creates a local in-memory tunnel
+func (c *Client) createLocalTunnel(_ context.Context, localPort int) (*api.TunnelResponse, error) {
+	// Log entry
+	if c.logger != nil {
+		c.logger.Info("Creating local tunnel", logging.Int("local_port", localPort))
+	}
+
+	// Create in-memory listener
+	hcName := fmt.Sprintf("hc-%s", uuid.New().String()[:8])
+	c.listener = relay.NewMockListener(hcName)
+
+	// TODO: Register with shared registry (for gateway to access)
+
+	return &api.TunnelResponse{
+		PublicURL:            fmt.Sprintf("http://localhost:8080/tunnel/%s", hcName),
+		RelayEndpoint:        "in-memory",
+		HybridConnectionName: hcName,
+		ListenerToken:        "local-mode-token",
+		SessionID:            fmt.Sprintf("session-%s", uuid.New().String()[:8]),
+	}, nil
+}
+
+// createRemoteTunnel requests a tunnel from the remote Gateway API
+func (c *Client) createRemoteTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error) {
 	// Log entry
 	if c.logger != nil {
 		c.logger.Info("Creating tunnel", logging.Int("local_port", localPort))
@@ -132,4 +180,53 @@ func (c *Client) CreateTunnel(ctx context.Context, localPort int) (*api.TunnelRe
 	}
 
 	return &tunnelResp, nil
+}
+
+// StartListening starts listening for connections (both local and remote modes)
+func (c *Client) StartListening(ctx context.Context, localPort int) error {
+	if c.mode == config.ModeLocal {
+		return c.startLocalListening(ctx, localPort)
+	}
+
+	// Remote mode listening
+	// TODO: Implement Azure Relay listener
+	if c.logger != nil {
+		c.logger.Info("Remote mode listening not yet implemented")
+	}
+	return fmt.Errorf("remote mode listening not yet implemented")
+}
+
+// startLocalListening listens for local mode connections
+func (c *Client) startLocalListening(ctx context.Context, localPort int) error {
+	if c.listener == nil {
+		return fmt.Errorf("no listener available; call CreateTunnel first")
+	}
+
+	if c.logger != nil {
+		c.logger.Info("Starting local listener", logging.Int("local_port", localPort))
+	}
+
+	for {
+		conn, err := c.listener.Accept(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return err
+		}
+
+		go c.handleConnection(conn, localPort)
+	}
+}
+
+// handleConnection handles an individual connection
+func (c *Client) handleConnection(conn relay.Connection, localPort int) {
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	// TODO: Implement HTTP request parsing and forwarding to localhost:localPort
+	if c.logger != nil {
+		c.logger.Debug("Handling connection", logging.Int("local_port", localPort))
+	}
 }

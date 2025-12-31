@@ -6,14 +6,22 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/julienstroheker/AzHexGate/gateway/tunnel"
 	"github.com/julienstroheker/AzHexGate/internal/api"
+	"github.com/julienstroheker/AzHexGate/internal/config"
 )
 
 func TestTunnelsHandlerPost(t *testing.T) {
+	// Create tunnel manager in remote mode for testing
+	manager := tunnel.NewManager(&tunnel.Options{
+		Mode: config.ModeRemote,
+	})
+	handler := NewTunnelsHandler(manager)
+
 	req := httptest.NewRequest(http.MethodPost, "/api/tunnels", nil)
 	w := httptest.NewRecorder()
 
-	TunnelsHandler(w, req)
+	handler(w, req)
 
 	resp := w.Result()
 	defer func() {
@@ -58,10 +66,15 @@ func TestTunnelsHandlerPost(t *testing.T) {
 }
 
 func TestTunnelsHandlerGet(t *testing.T) {
+	manager := tunnel.NewManager(&tunnel.Options{
+		Mode: config.ModeRemote,
+	})
+	handler := NewTunnelsHandler(manager)
+
 	req := httptest.NewRequest(http.MethodGet, "/api/tunnels", nil)
 	w := httptest.NewRecorder()
 
-	TunnelsHandler(w, req)
+	handler(w, req)
 
 	resp := w.Result()
 	defer func() {
@@ -76,10 +89,15 @@ func TestTunnelsHandlerGet(t *testing.T) {
 }
 
 func TestTunnelsHandlerPut(t *testing.T) {
+	manager := tunnel.NewManager(&tunnel.Options{
+		Mode: config.ModeRemote,
+	})
+	handler := NewTunnelsHandler(manager)
+
 	req := httptest.NewRequest(http.MethodPut, "/api/tunnels", nil)
 	w := httptest.NewRecorder()
 
-	TunnelsHandler(w, req)
+	handler(w, req)
 
 	resp := w.Result()
 	defer func() {
@@ -94,10 +112,15 @@ func TestTunnelsHandlerPut(t *testing.T) {
 }
 
 func TestTunnelsHandlerDelete(t *testing.T) {
+	manager := tunnel.NewManager(&tunnel.Options{
+		Mode: config.ModeRemote,
+	})
+	handler := NewTunnelsHandler(manager)
+
 	req := httptest.NewRequest(http.MethodDelete, "/api/tunnels", nil)
 	w := httptest.NewRecorder()
 
-	TunnelsHandler(w, req)
+	handler(w, req)
 
 	resp := w.Result()
 	defer func() {
@@ -112,10 +135,15 @@ func TestTunnelsHandlerDelete(t *testing.T) {
 }
 
 func TestTunnelsHandlerResponseFormat(t *testing.T) {
+	manager := tunnel.NewManager(&tunnel.Options{
+		Mode: config.ModeRemote,
+	})
+	handler := NewTunnelsHandler(manager)
+
 	req := httptest.NewRequest(http.MethodPost, "/api/tunnels", nil)
 	w := httptest.NewRecorder()
 
-	TunnelsHandler(w, req)
+	handler(w, req)
 
 	resp := w.Result()
 	defer func() {
@@ -130,7 +158,7 @@ func TestTunnelsHandlerResponseFormat(t *testing.T) {
 		t.Fatalf("Response is not valid JSON: %v", err)
 	}
 
-	// Verify mock values match expected static data
+	// Verify mock values match expected static data (remote mode placeholder)
 	expectedURL := "https://63873749.azhexgate.com"
 	if response.PublicURL != expectedURL {
 		t.Errorf("Expected public_url '%s', got '%s'", expectedURL, response.PublicURL)
@@ -154,5 +182,25 @@ func TestTunnelsHandlerResponseFormat(t *testing.T) {
 	expectedSessionID := "mock-session-id"
 	if response.SessionID != expectedSessionID {
 		t.Errorf("Expected session_id '%s', got '%s'", expectedSessionID, response.SessionID)
+	}
+}
+
+func TestTunnelsHandlerNilManager(t *testing.T) {
+	handler := NewTunnelsHandler(nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tunnels", nil)
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	resp := w.Result()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Error closing response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("Expected status code %d for nil manager, got %d", http.StatusInternalServerError, resp.StatusCode)
 	}
 }

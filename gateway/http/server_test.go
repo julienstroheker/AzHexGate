@@ -5,11 +5,20 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/julienstroheker/AzHexGate/gateway/tunnel"
+	"github.com/julienstroheker/AzHexGate/internal/config"
 )
 
 func TestNewServer(t *testing.T) {
 	port := 9999
-	server := NewServer(port)
+	manager := tunnel.NewManager(&tunnel.Options{
+		Mode: config.ModeRemote,
+	})
+	server := NewServer(&Options{
+		Port:    port,
+		Manager: manager,
+	})
 
 	if server == nil {
 		t.Fatal("Expected server to be created, got nil")
@@ -30,7 +39,13 @@ func TestNewServer(t *testing.T) {
 
 func TestServerLifecycle(t *testing.T) {
 	port := 9998
-	server := NewServer(port)
+	manager := tunnel.NewManager(&tunnel.Options{
+		Mode: config.ModeRemote,
+	})
+	server := NewServer(&Options{
+		Port:    port,
+		Manager: manager,
+	})
 
 	// Start server in a goroutine
 	serverErrors := make(chan error, 1)
@@ -75,7 +90,13 @@ func TestServerLifecycle(t *testing.T) {
 
 func TestServerShutdownTimeout(t *testing.T) {
 	port := 9997
-	server := NewServer(port)
+	manager := tunnel.NewManager(&tunnel.Options{
+		Mode: config.ModeRemote,
+	})
+	server := NewServer(&Options{
+		Port:    port,
+		Manager: manager,
+	})
 
 	// Start server
 	go func() {
@@ -100,7 +121,13 @@ func TestServerShutdownTimeout(t *testing.T) {
 
 func TestServerClose(t *testing.T) {
 	port := 9996
-	server := NewServer(port)
+	manager := tunnel.NewManager(&tunnel.Options{
+		Mode: config.ModeRemote,
+	})
+	server := NewServer(&Options{
+		Port:    port,
+		Manager: manager,
+	})
 
 	// Start server
 	go func() {

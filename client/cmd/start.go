@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/julienstroheker/AzHexGate/client/gateway"
+	"github.com/julienstroheker/AzHexGate/internal/config"
 	"github.com/julienstroheker/AzHexGate/internal/logging"
 	"github.com/spf13/cobra"
 )
@@ -17,6 +18,7 @@ const (
 var (
 	portFlag   int
 	apiURLFlag string
+	modeFlag   string
 )
 
 var startCmd = &cobra.Command{
@@ -25,15 +27,25 @@ var startCmd = &cobra.Command{
 	Long:  `Start the tunnel and forward traffic to localhost`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log := GetLogger()
-		log.Info("Starting tunnel", logging.Int("port", portFlag))
 
-		// Create Gateway API client with only overrides
+		// Parse and validate mode
+		mode := config.Mode(modeFlag)
+		if !mode.IsValid() {
+			return fmt.Errorf("invalid mode: %s (must be 'local' or 'remote')", modeFlag)
+		}
+
+		log.Info("Starting tunnel",
+			logging.Int("port", portFlag),
+			logging.String("mode", mode.String()))
+
+		// Create Gateway API client with mode
 		gatewayClient := gateway.NewClient(&gateway.Options{
 			BaseURL: apiURLFlag,
 			Logger:  log,
+			Mode:    mode,
 		})
 
-		// Call Gateway API to create tunnel with context
+		// Call Gateway API to create tunnel
 		ctx := context.Background()
 		tunnelResp, err := gatewayClient.CreateTunnel(ctx, portFlag)
 		if err != nil {
@@ -49,6 +61,18 @@ var startCmd = &cobra.Command{
 			logging.String("public_url", tunnelResp.PublicURL),
 			logging.String("session_id", tunnelResp.SessionID))
 
+		// Start listening for connections (both local and remote modes)
+		if mode == config.ModeLocal {
+			log.Info("Starting listener in local mode")
+			if err := gatewayClient.StartListening(ctx, portFlag); err != nil {
+				return fmt.Errorf("listener error: %w", err)
+			}
+		} else {
+			log.Info("Remote mode - listener not yet implemented")
+			// In remote mode, we would start the Azure Relay listener here
+			// For now, just return after printing the URL
+		}
+
 		return nil
 	},
 }
@@ -57,4 +81,6 @@ func init() {
 	rootCmd.AddCommand(startCmd)
 	startCmd.Flags().IntVarP(&portFlag, "port", "p", defaultPort, "Local port to forward traffic to")
 	startCmd.Flags().StringVar(&apiURLFlag, "api-url", defaultAPIURL, "Gateway API base URL")
+	startCmd.Flags().StringVar(&modeFlag, "mode", string(config.ModeRemote),
+		"Operation mode: local or remote")
 }
