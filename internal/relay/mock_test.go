@@ -323,8 +323,8 @@ func TestMockListener_MultipleConnections(t *testing.T) {
 	// Accept all connections
 	for i := 0; i < numConns; i++ {
 		ctx2, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer cancel()
 		_, err := listener.Accept(ctx2)
+		cancel()
 		if err != nil {
 			t.Fatalf("Accept %d failed: %v", i, err)
 		}
