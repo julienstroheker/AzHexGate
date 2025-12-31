@@ -1,11 +1,15 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
+
+// loggerKey is a custom type for context key to avoid collisions
+type loggerKey struct{}
 
 // responseWriter is a wrapper around http.ResponseWriter that captures the status code
 type responseWriter struct {
@@ -32,15 +36,23 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 
 // Logger is a middleware that logs HTTP requests and responses
 // It logs when a request is received and when the response is sent
+// The logger is stored in the request context for downstream handlers to access
 func Logger(logger *logging.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Store logger in context for downstream handlers
+			ctx := context.WithValue(r.Context(), loggerKey{}, logger)
+			r = r.WithContext(ctx)
+
 			// Record start time
 			start := time.Now()
 
+			// Retrieve logger from context (in case it was modified by a handler)
+			currentLogger := GetLogger(ctx)
+
 			// Extract telemetry IDs from context
-			requestID := GetRequestID(r.Context())
-			clientRequestID := GetClientRequestID(r.Context())
+			requestID := GetRequestID(ctx)
+			clientRequestID := GetClientRequestID(ctx)
 
 			// Build request log fields
 			fields := []logging.Field{
@@ -57,7 +69,7 @@ func Logger(logger *logging.Logger) func(http.Handler) http.Handler {
 			}
 
 			// Log request received
-			logger.Info("Request received", fields...)
+			currentLogger.Info("Request received", fields...)
 
 			// Wrap response writer to capture status code
 			rw := &responseWriter{
@@ -68,6 +80,9 @@ func Logger(logger *logging.Logger) func(http.Handler) http.Handler {
 
 			// Call next handler
 			next.ServeHTTP(rw, r)
+
+			// Retrieve logger again in case it was modified by handlers
+			currentLogger = GetLogger(ctx)
 
 			// Calculate response time
 			duration := time.Since(start)
@@ -88,7 +103,17 @@ func Logger(logger *logging.Logger) func(http.Handler) http.Handler {
 			}
 
 			// Log response sent
-			logger.Info("Response sent", responseFields...)
+			currentLogger.Info("Response sent", responseFields...)
 		})
 	}
+}
+
+// GetLogger retrieves the logger from the context
+// Returns the logger if found, or a default logger if not
+func GetLogger(ctx context.Context) *logging.Logger {
+	if logger, ok := ctx.Value(loggerKey{}).(*logging.Logger); ok {
+		return logger
+	}
+	// Return a default logger if not found in context
+	return logging.New(logging.InfoLevel)
 }
