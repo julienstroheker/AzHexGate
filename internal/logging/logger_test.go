@@ -2,6 +2,7 @@ package logging
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -343,5 +344,51 @@ func TestNewWithFormat(t *testing.T) {
 
 	if logger.format != FormatJSON {
 		t.Errorf("Expected format FormatJSON, got: %v", logger.format)
+	}
+}
+
+func TestWithContext(t *testing.T) {
+	logger := New(DebugLevel)
+	ctx := WithContext(context.Background(), logger)
+
+	retrievedLogger := FromContext(ctx)
+	if retrievedLogger == nil {
+		t.Fatal("Expected logger from context, got nil")
+	}
+
+	if retrievedLogger != logger {
+		t.Error("Expected same logger instance from context")
+	}
+}
+
+func TestFromContext_EmptyContext(t *testing.T) {
+	ctx := context.Background()
+	logger := FromContext(ctx)
+
+	if logger == nil {
+		t.Fatal("Expected default logger, got nil")
+	}
+
+	// Should return a default logger with InfoLevel
+	if logger.level != InfoLevel {
+		t.Errorf("Expected default logger with InfoLevel, got: %v", logger.level)
+	}
+}
+
+func TestFromContext_WithLogger(t *testing.T) {
+	buf := &bytes.Buffer{}
+	testLogger := NewWithOutput(DebugLevel, buf)
+	ctx := WithContext(context.Background(), testLogger)
+
+	logger := FromContext(ctx)
+	if logger == nil {
+		t.Fatal("Expected logger from context, got nil")
+	}
+
+	// Test that it's the same logger by logging and checking output
+	logger.Debug("test message")
+	output := buf.String()
+	if !strings.Contains(output, "test message") {
+		t.Errorf("Expected logger from context to work, got: %s", output)
 	}
 }

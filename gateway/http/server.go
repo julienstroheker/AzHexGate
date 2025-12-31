@@ -19,10 +19,7 @@ type Server struct {
 }
 
 // NewServer creates a new HTTP server instance
-func NewServer(port int) *Server {
-	// Create logger for the server
-	logger := logging.New(logging.InfoLevel)
-
+func NewServer(port int, logger *logging.Logger) *Server {
 	mux := http.NewServeMux()
 
 	// Register health check endpoint

@@ -1,15 +1,11 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"time"
 
 	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
-
-// loggerKey is a custom type for context key to avoid collisions
-type loggerKey struct{}
 
 // responseWriter is a wrapper around http.ResponseWriter that captures the status code
 type responseWriter struct {
@@ -41,14 +37,14 @@ func Logger(logger *logging.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Store logger in context for downstream handlers
-			ctx := context.WithValue(r.Context(), loggerKey{}, logger)
+			ctx := logging.WithContext(r.Context(), logger)
 			r = r.WithContext(ctx)
 
 			// Record start time
 			start := time.Now()
 
-			// Retrieve logger from context (in case it was modified by a handler)
-			currentLogger := GetLogger(ctx)
+			// Retrieve logger from context
+			currentLogger := logging.FromContext(ctx)
 
 			// Extract telemetry IDs from context
 			requestID := GetRequestID(ctx)
@@ -103,14 +99,4 @@ func Logger(logger *logging.Logger) func(http.Handler) http.Handler {
 			currentLogger.Info("Response sent", responseFields...)
 		})
 	}
-}
-
-// GetLogger retrieves the logger from the context
-// Returns the logger if found, or a default logger if not
-func GetLogger(ctx context.Context) *logging.Logger {
-	if logger, ok := ctx.Value(loggerKey{}).(*logging.Logger); ok {
-		return logger
-	}
-	// Return a default logger if not found in context
-	return logging.New(logging.InfoLevel)
 }

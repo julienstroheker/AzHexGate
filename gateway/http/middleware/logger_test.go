@@ -258,32 +258,6 @@ func TestResponseWriter_MultipleWriteHeader(t *testing.T) {
 	}
 }
 
-func TestGetLogger_EmptyContext(t *testing.T) {
-	ctx := context.Background()
-	logger := GetLogger(ctx)
-	if logger == nil {
-		t.Error("Expected default logger, got nil")
-	}
-}
-
-func TestGetLogger_WithValue(t *testing.T) {
-	buf := &bytes.Buffer{}
-	testLogger := logging.NewWithOutput(logging.DebugLevel, buf)
-	ctx := context.WithValue(context.Background(), loggerKey{}, testLogger)
-
-	logger := GetLogger(ctx)
-	if logger == nil {
-		t.Error("Expected logger from context, got nil")
-	}
-
-	// Test that it's the same logger by logging and checking output
-	logger.Debug("test message")
-	output := buf.String()
-	if !strings.Contains(output, "test message") {
-		t.Errorf("Expected logger from context to work, got: %s", output)
-	}
-}
-
 func TestLogger_StoresLoggerInContext(t *testing.T) {
 	// Create logger with buffer
 	buf := &bytes.Buffer{}
@@ -291,7 +265,7 @@ func TestLogger_StoresLoggerInContext(t *testing.T) {
 
 	// Create test handler that retrieves logger from context
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		retrievedLogger := GetLogger(r.Context())
+		retrievedLogger := logging.FromContext(r.Context())
 		if retrievedLogger == nil {
 			t.Error("Expected logger in context")
 		}

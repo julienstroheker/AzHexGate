@@ -6,10 +6,12 @@ import (
 	"testing"
 
 	"github.com/julienstroheker/AzHexGate/gateway/http/middleware"
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 func TestServer_MiddlewareIntegration(t *testing.T) {
-	server := NewServer(9999)
+	logger := logging.New(logging.InfoLevel)
+	server := NewServer(9999, logger)
 
 	// Test that telemetry headers are added
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -38,7 +40,8 @@ func TestServer_MiddlewareIntegration(t *testing.T) {
 }
 
 func TestServer_MiddlewareContextPropagation(t *testing.T) {
-	server := NewServer(9999)
+	logger := logging.New(logging.InfoLevel)
+	server := NewServer(9999, logger)
 
 	// Create a custom handler to verify context values
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +83,8 @@ func TestServer_MiddlewareContextPropagation(t *testing.T) {
 }
 
 func TestServer_MiddlewareWithoutClientRequestID(t *testing.T) {
-	server := NewServer(9999)
+	logger := logging.New(logging.InfoLevel)
+	server := NewServer(9999, logger)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()

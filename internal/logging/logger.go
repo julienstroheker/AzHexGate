@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -220,4 +221,22 @@ func Error(err error) Field {
 // Any creates a Field with any value
 func Any(key string, value any) Field {
 	return Field{Key: key, Value: value}
+}
+
+// loggerKey is a custom type for context key to avoid collisions
+type loggerKey struct{}
+
+// WithContext stores the logger in the context
+func WithContext(ctx context.Context, logger *Logger) context.Context {
+	return context.WithValue(ctx, loggerKey{}, logger)
+}
+
+// FromContext retrieves the logger from the context
+// Returns the logger if found, or a default logger if not
+func FromContext(ctx context.Context) *Logger {
+	if logger, ok := ctx.Value(loggerKey{}).(*Logger); ok {
+		return logger
+	}
+	// Return a default logger if not found in context
+	return New(InfoLevel)
 }
