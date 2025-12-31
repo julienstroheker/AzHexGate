@@ -116,13 +116,13 @@ func (l *Logger) With(fields ...Field) *Logger {
 		output: l.output,
 		fields: make([]Field, 0, len(l.fields)+len(fields)),
 	}
-	
+
 	// Copy existing fields
 	newLogger.fields = append(newLogger.fields, l.fields...)
-	
+
 	// Add new fields
 	newLogger.fields = append(newLogger.fields, fields...)
-	
+
 	return newLogger
 }
 
