@@ -3,6 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 // TunnelResponse represents the response from the tunnel creation endpoint
@@ -17,6 +19,9 @@ type TunnelResponse struct {
 // TunnelsHandler handles POST requests to create new tunnels
 // This is a mock implementation that returns static data
 func TunnelsHandler(w http.ResponseWriter, r *http.Request) {
+	// Retrieve logger from context to establish the pattern
+	_ = logging.FromContext(r.Context())
+
 	// Only accept POST requests
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)

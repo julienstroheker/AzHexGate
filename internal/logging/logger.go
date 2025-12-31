@@ -71,6 +71,7 @@ type Logger struct {
 	level  Level
 	format Format
 	output io.Writer
+	fields []Field // Persistent fields attached to this logger
 }
 
 // New creates a new Logger with the specified level and console format
@@ -105,6 +106,26 @@ func (l *Logger) SetLevel(level Level) {
 	l.level = level
 }
 
+// With creates a new Logger with additional fields attached
+// The new logger inherits all settings and existing fields from the parent
+func (l *Logger) With(fields ...Field) *Logger {
+	// Create a new logger with the same settings
+	newLogger := &Logger{
+		level:  l.level,
+		format: l.format,
+		output: l.output,
+		fields: make([]Field, 0, len(l.fields)+len(fields)),
+	}
+	
+	// Copy existing fields
+	newLogger.fields = append(newLogger.fields, l.fields...)
+	
+	// Add new fields
+	newLogger.fields = append(newLogger.fields, fields...)
+	
+	return newLogger
+}
+
 // Debug logs a debug message with optional fields
 func (l *Logger) Debug(msg string, fields ...Field) {
 	l.log(DebugLevel, msg, fields...)
@@ -131,10 +152,15 @@ func (l *Logger) log(level Level, msg string, fields ...Field) {
 		return
 	}
 
+	// Combine persistent fields with call-specific fields
+	allFields := make([]Field, 0, len(l.fields)+len(fields))
+	allFields = append(allFields, l.fields...)
+	allFields = append(allFields, fields...)
+
 	if l.format == FormatJSON {
-		l.logJSON(level, msg, fields...)
+		l.logJSON(level, msg, allFields...)
 	} else {
-		l.logConsole(level, msg, fields...)
+		l.logConsole(level, msg, allFields...)
 	}
 }
 

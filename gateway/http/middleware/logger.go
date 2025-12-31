@@ -36,36 +36,36 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 func Logger(logger *logging.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Store logger in context for downstream handlers
-			ctx := logging.WithContext(r.Context(), logger)
-			r = r.WithContext(ctx)
-
 			// Record start time
 			start := time.Now()
 
-			// Retrieve logger from context
-			currentLogger := logging.FromContext(ctx)
-
 			// Extract telemetry IDs from context
-			requestID := GetRequestID(ctx)
-			clientRequestID := GetClientRequestID(ctx)
+			requestID := GetRequestID(r.Context())
+			clientRequestID := GetClientRequestID(r.Context())
 
-			// Build request log fields
-			fields := []logging.Field{
+			// Create a child logger with request context fields
+			requestFields := []logging.Field{
 				logging.String("method", r.Method),
 				logging.String("path", r.URL.Path),
 				logging.String("remote_addr", r.RemoteAddr),
 			}
 
 			if requestID != "" {
-				fields = append(fields, logging.String("request_id", requestID))
+				requestFields = append(requestFields, logging.String("request_id", requestID))
 			}
 			if clientRequestID != "" {
-				fields = append(fields, logging.String("client_request_id", clientRequestID))
+				requestFields = append(requestFields, logging.String("client_request_id", clientRequestID))
 			}
 
+			// Create child logger with request fields
+			requestLogger := logger.With(requestFields...)
+
+			// Store logger in context for downstream handlers
+			ctx := logging.WithContext(r.Context(), requestLogger)
+			r = r.WithContext(ctx)
+
 			// Log request received
-			currentLogger.Info("Request received", fields...)
+			requestLogger.Info("Request received")
 
 			// Wrap response writer to capture status code
 			rw := &responseWriter{
@@ -80,23 +80,11 @@ func Logger(logger *logging.Logger) func(http.Handler) http.Handler {
 			// Calculate response time
 			duration := time.Since(start)
 
-			// Build response log fields
-			responseFields := []logging.Field{
-				logging.String("method", r.Method),
-				logging.String("path", r.URL.Path),
+			// Log response sent with additional fields
+			requestLogger.Info("Response sent",
 				logging.Int("status", rw.statusCode),
 				logging.String("duration", duration.String()),
-			}
-
-			if requestID != "" {
-				responseFields = append(responseFields, logging.String("request_id", requestID))
-			}
-			if clientRequestID != "" {
-				responseFields = append(responseFields, logging.String("client_request_id", clientRequestID))
-			}
-
-			// Log response sent
-			currentLogger.Info("Response sent", responseFields...)
+			)
 		})
 	}
 }

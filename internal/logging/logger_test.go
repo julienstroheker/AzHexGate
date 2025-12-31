@@ -392,3 +392,64 @@ func TestFromContext_WithLogger(t *testing.T) {
 		t.Errorf("Expected logger from context to work, got: %s", output)
 	}
 }
+
+func TestWith(t *testing.T) {
+	buf := &bytes.Buffer{}
+	logger := NewWithOutput(InfoLevel, buf)
+
+	// Create child logger with additional fields
+	childLogger := logger.With(String("request_id", "123"), String("user", "test"))
+
+	childLogger.Info("test message")
+
+	output := buf.String()
+	if !strings.Contains(output, "test message") {
+		t.Errorf("Expected 'test message' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "request_id=123") {
+		t.Errorf("Expected 'request_id=123' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "user=test") {
+		t.Errorf("Expected 'user=test' in output, got: %s", output)
+	}
+}
+
+func TestWith_ChainingFields(t *testing.T) {
+	buf := &bytes.Buffer{}
+	logger := NewWithOutput(InfoLevel, buf)
+
+	// Create child logger with some fields
+	child1 := logger.With(String("field1", "value1"))
+
+	// Create grandchild with additional fields
+	child2 := child1.With(String("field2", "value2"))
+
+	child2.Info("test message")
+
+	output := buf.String()
+	if !strings.Contains(output, "field1=value1") {
+		t.Errorf("Expected 'field1=value1' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "field2=value2") {
+		t.Errorf("Expected 'field2=value2' in output, got: %s", output)
+	}
+}
+
+func TestWith_AdditionalFieldsOnLog(t *testing.T) {
+	buf := &bytes.Buffer{}
+	logger := NewWithOutput(InfoLevel, buf)
+
+	// Create child logger with persistent fields
+	childLogger := logger.With(String("persistent", "field"))
+
+	// Log with additional fields
+	childLogger.Info("test message", String("additional", "field"))
+
+	output := buf.String()
+	if !strings.Contains(output, "persistent=field") {
+		t.Errorf("Expected 'persistent=field' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "additional=field") {
+		t.Errorf("Expected 'additional=field' in output, got: %s", output)
+	}
+}
