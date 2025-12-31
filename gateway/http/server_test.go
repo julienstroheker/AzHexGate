@@ -8,16 +8,19 @@ import (
 
 	"github.com/julienstroheker/AzHexGate/gateway/tunnel"
 	"github.com/julienstroheker/AzHexGate/internal/config"
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 func TestNewServer(t *testing.T) {
 	port := 9999
+	log := logging.New(logging.DebugLevel)
 	manager := tunnel.NewManager(&tunnel.Options{
 		Mode: config.ModeRemote,
 	})
 	server := NewServer(&Options{
 		Port:    port,
 		Manager: manager,
+		Logger:  log,
 	})
 
 	if server == nil {
@@ -39,12 +42,14 @@ func TestNewServer(t *testing.T) {
 
 func TestServerLifecycle(t *testing.T) {
 	port := 9998
+	log := logging.New(logging.DebugLevel)
 	manager := tunnel.NewManager(&tunnel.Options{
 		Mode: config.ModeRemote,
 	})
 	server := NewServer(&Options{
 		Port:    port,
 		Manager: manager,
+		Logger:  log,
 	})
 
 	// Start server in a goroutine
@@ -90,12 +95,14 @@ func TestServerLifecycle(t *testing.T) {
 
 func TestServerShutdownTimeout(t *testing.T) {
 	port := 9997
+	log := logging.New(logging.DebugLevel)
 	manager := tunnel.NewManager(&tunnel.Options{
 		Mode: config.ModeRemote,
 	})
 	server := NewServer(&Options{
 		Port:    port,
 		Manager: manager,
+		Logger:  log,
 	})
 
 	// Start server
@@ -121,12 +128,14 @@ func TestServerShutdownTimeout(t *testing.T) {
 
 func TestServerClose(t *testing.T) {
 	port := 9996
+	log := logging.New(logging.DebugLevel)
 	manager := tunnel.NewManager(&tunnel.Options{
 		Mode: config.ModeRemote,
 	})
 	server := NewServer(&Options{
 		Port:    port,
 		Manager: manager,
+		Logger:  log,
 	})
 
 	// Start server

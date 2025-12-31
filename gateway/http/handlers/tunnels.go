@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/julienstroheker/AzHexGate/gateway/tunnel"
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 const (
@@ -16,6 +17,9 @@ const (
 // NewTunnelsHandler creates a handler for tunnel creation requests
 func NewTunnelsHandler(manager *tunnel.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Retrieve logger from context to establish the pattern for future handlers
+		// Will be used for actual logging when real tunnel creation logic is implemented
+		logger := logging.FromContext(r.Context())
 		// Only accept POST requests
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -33,7 +37,7 @@ func NewTunnelsHandler(manager *tunnel.Manager) http.HandlerFunc {
 		localPort := defaultLocalPort
 
 		// Create tunnel using manager
-		response, err := manager.CreateTunnel(r.Context(), localPort)
+		response, err := manager.CreateTunnel(r.Context(), logger, localPort)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return

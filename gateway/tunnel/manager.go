@@ -14,9 +14,7 @@ import (
 
 // Manager manages tunnel creation and lifecycle
 type Manager struct {
-	mode   config.Mode
-	logger *logging.Logger
-
+	mode config.Mode
 	// Local mode: in-memory registry
 	mu        sync.RWMutex
 	listeners map[string]relay.Listener
@@ -27,8 +25,7 @@ type Manager struct {
 
 // Options configures the tunnel manager
 type Options struct {
-	Mode   config.Mode
-	Logger *logging.Logger
+	Mode config.Mode
 }
 
 // NewManager creates a new tunnel manager
@@ -41,30 +38,29 @@ func NewManager(opts *Options) *Manager {
 
 	return &Manager{
 		mode:      opts.Mode,
-		logger:    opts.Logger,
 		listeners: make(map[string]relay.Listener),
 	}
 }
 
 // CreateTunnel creates a new tunnel based on the configured mode
-func (m *Manager) CreateTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error) {
+func (m *Manager) CreateTunnel(ctx context.Context, logger *logging.Logger, localPort int) (*api.TunnelResponse, error) {
 	switch m.mode {
 	case config.ModeLocal:
-		return m.createLocalTunnel(ctx, localPort)
+		return m.createLocalTunnel(ctx, logger, localPort)
 	case config.ModeRemote:
-		return m.createRemoteTunnel(ctx, localPort)
+		return m.createRemoteTunnel(ctx, logger, localPort)
 	default:
 		return nil, fmt.Errorf("unsupported mode: %s", m.mode)
 	}
 }
 
 // createLocalTunnel creates an in-memory tunnel for local development
-func (m *Manager) createLocalTunnel(_ context.Context, localPort int) (*api.TunnelResponse, error) {
+func (m *Manager) createLocalTunnel(_ context.Context, logger *logging.Logger, localPort int) (*api.TunnelResponse, error) {
 	// Generate a unique hybrid connection name
 	hcName := fmt.Sprintf("hc-%s", uuid.New().String()[:8])
 
-	if m.logger != nil {
-		m.logger.Info("Creating local tunnel",
+	if logger != nil {
+		logger.Info("Creating local tunnel",
 			logging.String("hc_name", hcName),
 			logging.Int("local_port", localPort))
 	}
@@ -88,11 +84,11 @@ func (m *Manager) createLocalTunnel(_ context.Context, localPort int) (*api.Tunn
 }
 
 // createRemoteTunnel creates a tunnel using Azure Relay (placeholder)
-func (m *Manager) createRemoteTunnel(_ context.Context, localPort int) (*api.TunnelResponse, error) {
+func (m *Manager) createRemoteTunnel(_ context.Context, logger *logging.Logger, localPort int) (*api.TunnelResponse, error) {
 	// TODO: Implement Azure Relay integration
 	// This is a placeholder that returns mock data for now
-	if m.logger != nil {
-		m.logger.Info("Creating remote tunnel (placeholder)",
+	if logger != nil {
+		logger.Info("Creating remote tunnel (placeholder)",
 			logging.Int("local_port", localPort))
 	}
 

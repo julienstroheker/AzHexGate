@@ -59,14 +59,14 @@ func runServer() error {
 
 	// Create tunnel manager with mode
 	manager := tunnel.NewManager(&tunnel.Options{
-		Mode:   mode,
-		Logger: log,
+		Mode: mode,
 	})
 
 	// Create server with manager
 	server := http.NewServer(&http.Options{
 		Port:    portFlag,
 		Manager: manager,
+		Logger:  log,
 	})
 
 	// Channel to listen for errors coming from the listener.

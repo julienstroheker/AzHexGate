@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/julienstroheker/AzHexGate/internal/config"
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 func TestNewManager(t *testing.T) {
@@ -28,7 +29,8 @@ func TestManager_CreateTunnel_LocalMode(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	resp, err := manager.CreateTunnel(ctx, 3000)
+	log := logging.New(logging.DebugLevel)
+	resp, err := manager.CreateTunnel(ctx, log, 3000)
 	if err != nil {
 		t.Fatalf("CreateTunnel failed: %v", err)
 	}
@@ -56,7 +58,8 @@ func TestManager_CreateTunnel_RemoteMode(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	resp, err := manager.CreateTunnel(ctx, 3000)
+	log := logging.New(logging.DebugLevel)
+	resp, err := manager.CreateTunnel(ctx, log, 3000)
 	if err != nil {
 		t.Fatalf("CreateTunnel failed: %v", err)
 	}
@@ -77,7 +80,8 @@ func TestManager_GetListener_LocalMode(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	resp, err := manager.CreateTunnel(ctx, 3000)
+	log := logging.New(logging.DebugLevel)
+	resp, err := manager.CreateTunnel(ctx, log, 3000)
 	if err != nil {
 		t.Fatalf("CreateTunnel failed: %v", err)
 	}
@@ -124,7 +128,8 @@ func TestManager_GetSender_LocalMode(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	resp, err := manager.CreateTunnel(ctx, 3000)
+	log := logging.New(logging.DebugLevel)
+	resp, err := manager.CreateTunnel(ctx, log, 3000)
 	if err != nil {
 		t.Fatalf("CreateTunnel failed: %v", err)
 	}
