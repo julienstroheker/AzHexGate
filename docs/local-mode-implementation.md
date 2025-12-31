@@ -48,66 +48,17 @@ client/
 
 ### 1. Mode Type Definition
 
-**File**: `internal/config/mode.go` (NEW)
+**File**: `internal/config/mode.go`
 
-```go
-package config
-
-// Mode represents the operational mode of the application
-type Mode string
-
-const (
-    // ModeLocal runs with in-memory relay (no Azure required)
-    ModeLocal Mode = "local"
-    
-    // ModeRemote runs with Azure Relay
-    ModeRemote Mode = "remote"
-)
-
-// IsValid checks if the mode is valid
-func (m Mode) IsValid() bool {
-    return m == ModeLocal || m == ModeRemote
-}
-
-// String returns the string representation
-func (m Mode) String() string {
-    return string(m)
-}
-```
+Already implemented - defines `ModeLocal` and `ModeRemote` enums with validation.
 
 ### 2. Gateway Implementation
 
 #### 2.1 Tunnel Manager
 
-**File**: `gateway/tunnel/manager.go` (NEW)
+**File**: `gateway/tunnel/manager.go`
 
-The tunnel manager encapsulates all tunnel creation and management logic:
-
-```go
-package tunnel
-
-type Manager struct {
-    mode      config.Mode
-    logger    *logging.Logger
-    
-    // Local mode: in-memory registry
-    mu        sync.RWMutex
-    listeners map[string]relay.Listener
-    
-    // Remote mode: Azure Relay credentials
-    // TODO: Add Azure Relay client fields
-}
-
-type Options struct {
-    Mode   config.Mode
-    Logger *logging.Logger
-}
-
-func NewManager(opts *Options) *Manager
-func (m *Manager) CreateTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error)
-func (m *Manager) GetListener(hcName string) (relay.Listener, error)
-func (m *Manager) GetSender(hcName string) (relay.Sender, error)
-```
+The tunnel manager encapsulates all tunnel creation and management logic. In local mode, it creates and stores MockListener instances in an in-memory registry.
 
 **Key Methods**:
 
@@ -116,292 +67,161 @@ func (m *Manager) GetSender(hcName string) (relay.Sender, error)
 - `GetSender()`: Creates a mock sender for proxying requests (local mode only)
 
 **Local Mode Behavior**:
-- Creates `MockListener` instances
+- Creates `MockListener` instances with unique hybrid connection names
 - Stores them in an in-memory map (`listeners`)
-- Returns tunnel metadata with local URLs
+- Returns tunnel metadata with `/tunnel/{hcName}` URLs for proxying
 
 **Remote Mode Behavior**:
 - TODO: Connect to Azure Relay
 - TODO: Obtain real listener tokens
-- Returns production tunnel metadata
+- Returns placeholder production tunnel metadata
 
-#### 2.2 HTTP Server Updates
+#### 2.2 HTTP Traffic Proxy Handler
 
-**File**: `gateway/http/server.go` (UPDATED)
+**File**: `gateway/http/handlers/proxy.go` ✅ IMPLEMENTED
 
-Add manager as dependency:
+The proxy handler routes incoming HTTP traffic through the relay to the client. This works for **both local and remote modes** - it's not just a testing feature, it's the core production functionality.
 
-```go
-type Server struct {
-    server  *http.Server
-    port    int
-    manager *tunnel.Manager  // NEW
-}
+**Key Features**:
+- Extracts tunnel ID from URL path (local mode: `/tunnel/hc-abc123/path`) or Host header (remote mode: `subdomain.domain.tld`)
+- Gets the relay sender from the tunnel manager
+- Dials a relay connection using `sender.Dial()`
+- Forwards the HTTP request through the relay connection
+- Reads the HTTP response back and returns it to the client
 
-type Options struct {
-    Port    int
-    Manager *tunnel.Manager  // NEW
-}
-
-func NewServer(opts *Options) *Server {
-    mux := http.NewServeMux()
-    mux.HandleFunc("/healthz", handlers.HealthHandler)
-    mux.HandleFunc("/api/tunnels", handlers.NewTunnelsHandler(opts.Manager))
-    // ...
-}
+**Request Flow**:
+```
+Browser → Gateway :8080/tunnel/hc-abc123/api/users
+         ↓
+    Extract hc-abc123
+         ↓
+    manager.GetSender(hc-abc123)
+         ↓
+    sender.Dial(ctx) → Connects to MockListener
+         ↓
+    Write HTTP request to connection
+         ↓
+    Read HTTP response from connection
+         ↓
+    Return response to browser
 ```
 
-#### 2.3 Tunnels Handler Updates
+#### 2.3 Internal Listener Connection Endpoint
 
-**File**: `gateway/http/handlers/tunnels.go` (UPDATED)
+**File**: `gateway/http/handlers/listen.go` ✅ IMPLEMENTED
 
-Change from function to factory pattern:
+This endpoint allows clients to connect and accept relay connections, mimicking Azure Relay's listener behavior.
 
-```go
-// Before: func TunnelsHandler(w http.ResponseWriter, r *http.Request)
-// After:
-func NewTunnelsHandler(manager *tunnel.Manager) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        if r.Method != http.MethodPost {
-            w.WriteHeader(http.StatusMethodNotAllowed)
-            return
-        }
+**Endpoint**: `GET /internal/listen/{hcName}`
 
-        // TODO: Parse localPort from request body
-        response, err := manager.CreateTunnel(r.Context(), 3000)
-        if err != nil {
-            w.WriteHeader(http.StatusInternalServerError)
-            return
-        }
+**Behavior**:
+- Client makes a GET request to this endpoint with the hybrid connection name
+- Gateway looks up the MockListener from its registry
+- Gateway calls `listener.Accept(ctx)` to wait for an incoming connection
+- When a connection arrives (via proxy handler's `sender.Dial()`), the Accept returns
+- Gateway streams the connection through the HTTP response (simplified implementation)
 
-        data, err := json.Marshal(response)
-        if err != nil {
-            w.WriteHeader(http.StatusInternalServerError)
-            return
-        }
+**Note**: The current implementation is simplified - a production version would need bidirectional streaming using WebSockets, HTTP/2, or Server-Sent Events.
 
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(http.StatusOK)
-        _, _ = w.Write(data)
-    }
-}
-```
+#### 2.4 HTTP Server Updates
 
-#### 2.4 Gateway CLI Updates
+**File**: `gateway/http/server.go` ✅ UPDATED
 
-**File**: `gateway/cmd/start.go` (UPDATED)
+Added two new routes:
+- `/tunnel/*` - Proxy handler for routing traffic through relay
+- `/internal/listen/*` - Listener endpoint for clients to accept connections
 
-Add mode flag and wire up manager:
+Both handlers receive the tunnel manager as a dependency for accessing the relay registry.
 
-```go
-var (
-    portFlag            int
-    shutdownTimeoutFlag int
-    modeFlag            string  // NEW
-)
+#### 2.5 Tunnels Handler Updates
 
-func init() {
-    rootCmd.AddCommand(startCmd)
-    startCmd.Flags().IntVarP(&portFlag, "port", "p", defaultPort, "Port to listen on")
-    startCmd.Flags().IntVar(&shutdownTimeoutFlag, "shutdown-timeout", defaultShutdownTimeout,
-        "Graceful shutdown timeout in seconds")
-    startCmd.Flags().StringVar(&modeFlag, "mode", string(config.ModeRemote), 
-        "Operation mode: local or remote")
-}
+**File**: `gateway/http/handlers/tunnels.go` ✅ ALREADY UPDATED
 
-func runServer() error {
-    log := GetLogger()
-    
-    // Parse and validate mode
-    mode := config.Mode(modeFlag)
-    if !mode.IsValid() {
-        return fmt.Errorf("invalid mode: %s (must be 'local' or 'remote')", modeFlag)
-    }
-    
-    log.Info("Starting gateway server", 
-        logging.Int("port", portFlag),
-        logging.String("mode", mode.String()))
+Uses factory pattern `NewTunnelsHandler(manager)` to delegate tunnel creation to the manager.
 
-    // Create tunnel manager with mode
-    manager := tunnel.NewManager(&tunnel.Options{
-        Mode:   mode,
-        Logger: log,
-    })
+#### 2.6 Gateway CLI Updates
 
-    // Create server with manager
-    server := http.NewServer(&http.Options{
-        Port:    portFlag,
-        Manager: manager,
-    })
+**File**: `gateway/cmd/start.go` ✅ ALREADY UPDATED
 
-    // ... rest of signal handling unchanged
-}
-```
+Added `--mode` flag with validation and wires up the tunnel manager with the selected mode.
 
 ### 3. Client Implementation
 
 #### 3.1 Gateway Client Updates
 
-**File**: `client/gateway/client.go` (UPDATED)
+**File**: `client/gateway/client.go` ✅ ALREADY UPDATED
 
-Add mode support to the client:
+Added mode support to the client with `Mode` field in Options.
+
+#### 3.2 Tunnel Creation
+
+**File**: `client/gateway/tunnel.go` ✅ UPDATED
+
+In local mode, the client now **calls the gateway API** (same as remote mode) instead of creating its own listener. This ensures:
+- Gateway creates and owns the MockListener
+- Client gets back the correct tunnel ID
+- Both processes are actually communicating
+- Mimics Azure Relay behavior
 
 ```go
-type Options struct {
-    BaseURL    string
-    Timeout    time.Duration
-    MaxRetries int
-    Logger     *logging.Logger
-    Mode       config.Mode  // NEW
+func (c *Client) createLocalTunnel(ctx, logger, localPort) {
+    // Call gateway API - gateway creates MockListener
+    return c.createRemoteTunnel(ctx, logger, localPort)
 }
+```
 
-type Client struct {
-    baseURL    string
-    httpClient *httpclient.Client
-    logger     *logging.Logger
-    mode       config.Mode   // NEW
-    listener   relay.Listener // NEW - for local mode
-}
+#### 3.3 Listener Connection
 
-func NewClient(opts *Options) *Client {
-    if opts == nil {
-        opts = &Options{
-            Mode: config.ModeRemote, // Default to remote
-        }
-    }
-    
-    return &Client{
-        baseURL:    baseURL,
-        httpClient: httpclient.NewClient(httpOpts),
-        logger:     opts.Logger,
-        mode:       opts.Mode,
-    }
-}
+**File**: `client/gateway/listener.go` ✅ IMPLEMENTED
 
-func (c *Client) CreateTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error) {
-    switch c.mode {
-    case config.ModeLocal:
-        return c.createLocalTunnel(ctx, localPort)
-    case config.ModeRemote:
-        return c.createRemoteTunnel(ctx, localPort)
-    default:
-        return nil, fmt.Errorf("unsupported mode: %s", c.mode)
-    }
-}
+The client connects to the gateway's listener endpoint to accept relay connections.
 
-func (c *Client) createLocalTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error) {
-    // Create in-memory listener
-    c.listener = relay.NewMockListener("hc-local")
-    
-    // TODO: Register with shared registry (for gateway to access)
-    
-    return &api.TunnelResponse{
-        PublicURL:            "http://localhost:8080/tunnel/local",
-        RelayEndpoint:        "in-memory",
-        HybridConnectionName: "hc-local",
-        ListenerToken:        "local-mode",
-        SessionID:            "local-session",
-    }, nil
-}
+**Key Implementation**:
 
-func (c *Client) createRemoteTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error) {
-    // Existing HTTP API call to gateway
-    // ... (current CreateTunnel implementation)
-}
-
-// NEW: Start listening for connections
-func (c *Client) StartListening(ctx context.Context, localPort int) error {
-    if c.listener == nil {
-        return fmt.Errorf("no listener available; call CreateTunnel first")
-    }
-    
+```go
+func (c *Client) StartListening(ctx, logger, localPort, tunnelResp) error {
+    // In local mode, continuously poll gateway's listener endpoint
     for {
-        conn, err := c.listener.Accept(ctx)
-        if err != nil {
-            return err
-        }
-        
-        go c.handleConnection(conn, localPort)
+        // Make GET request to /internal/listen/{hcName}
+        // This mimics Azure Relay's Accept() behavior
+        acceptOneConnection(ctx, logger, localPort, hcName)
     }
 }
-
-// NEW: Handle individual connections
-func (c *Client) handleConnection(conn relay.Connection, localPort int) {
-    // TODO: Implement HTTP request parsing and forwarding to localhost:localPort
-    defer conn.Close()
-}
 ```
 
-#### 3.2 Client CLI Updates
+**Connection Flow**:
+1. Client calls `GET /internal/listen/{hcName}`
+2. Gateway's listener endpoint calls `listener.Accept()`
+3. When traffic comes in, proxy handler's `sender.Dial()` sends a connection
+4. Gateway's Accept() returns that connection
+5. Client reads HTTP request from the response stream
+6. Client forwards request to `localhost:{localPort}`
+7. Client reads response from localhost
+8. (In current simplified implementation, response doesn't flow back)
 
-**File**: `client/cmd/start.go` (UPDATED)
+#### 3.4 Connection Handler
 
-Add mode flag and call StartListening:
+**File**: `client/gateway/listener.go` ✅ IMPLEMENTED
 
 ```go
-var (
-    portFlag   int
-    apiURLFlag string
-    modeFlag   string  // NEW
-)
-
-var startCmd = &cobra.Command{
-    Use:   "start",
-    Short: "Start the tunnel and forward traffic to localhost",
-    Long:  `Start the tunnel and forward traffic to localhost`,
-    RunE: func(cmd *cobra.Command, args []string) error {
-        log := GetLogger()
-        
-        // Parse and validate mode
-        mode := config.Mode(modeFlag)
-        if !mode.IsValid() {
-            return fmt.Errorf("invalid mode: %s (must be 'local' or 'remote')", modeFlag)
-        }
-        
-        log.Info("Starting tunnel", 
-            logging.Int("port", portFlag),
-            logging.String("mode", mode.String()))
-
-        // Create Gateway API client with mode
-        gatewayClient := gateway.NewClient(&gateway.Options{
-            BaseURL: apiURLFlag,
-            Logger:  log,
-            Mode:    mode,
-        })
-
-        // Call Gateway API to create tunnel
-        ctx := context.Background()
-        tunnelResp, err := gatewayClient.CreateTunnel(ctx, portFlag)
-        if err != nil {
-            return fmt.Errorf("failed to create tunnel: %w", err)
-        }
-
-        // Print the public URL
-        cmd.Println("Tunnel established")
-        cmd.Println(fmt.Sprintf("Public URL: %s", tunnelResp.PublicURL))
-        cmd.Println(fmt.Sprintf("Forwarding to: http://localhost:%d", portFlag))
-
-        log.Info("Tunnel created successfully",
-            logging.String("public_url", tunnelResp.PublicURL),
-            logging.String("session_id", tunnelResp.SessionID))
-
-        // Start listening for connections (both local and remote modes)
-        if err := gatewayClient.StartListening(ctx, portFlag); err != nil {
-            return fmt.Errorf("listener error: %w", err)
-        }
-
-        return nil
-    },
-}
-
-func init() {
-    rootCmd.AddCommand(startCmd)
-    startCmd.Flags().IntVarP(&portFlag, "port", "p", defaultPort, "Local port to forward traffic to")
-    startCmd.Flags().StringVar(&apiURLFlag, "api-url", defaultAPIURL, "Gateway API base URL")
-    startCmd.Flags().StringVar(&modeFlag, "mode", string(config.ModeRemote), 
-        "Operation mode: local or remote")
+func (c *Client) handleConnection(req, connReader, logger, localPort) {
+    // Update request URL to point to localhost
+    req.URL.Scheme = "http"
+    req.URL.Host = fmt.Sprintf("localhost:%d", localPort)
+    
+    // Forward to localhost using standard http.Client
+    resp, err := client.Do(req)
+    
+    // Note: Response streaming back through the HTTP connection
+    // is simplified in this implementation
 }
 ```
+
+#### 3.5 Client CLI Updates
+
+**File**: `client/cmd/start.go` ✅ UPDATED
+
+Added `--mode` flag and passes tunnel response to `StartListening()`.
 
 ## Usage Examples
 

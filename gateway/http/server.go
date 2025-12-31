@@ -43,6 +43,12 @@ func NewServer(opts *Options) *Server {
 	// Register management API endpoints
 	mux.HandleFunc("/api/tunnels", handlers.NewTunnelsHandler(opts.Manager))
 
+	// Register internal listener endpoint for client connections
+	mux.HandleFunc("/internal/listen/", handlers.NewListenHandler(opts.Manager, opts.Logger))
+
+	// Register traffic proxy handler (for both local and remote modes)
+	mux.HandleFunc("/tunnel/", handlers.NewProxyHandler(opts.Manager, opts.Logger))
+
 	// Chain middlewares: Telemetry -> Logger -> Metrics -> handlers
 	// Telemetry is first to ensure all requests get tracking IDs
 	// Logger is second to log requests with telemetry IDs

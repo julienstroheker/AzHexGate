@@ -64,7 +64,7 @@ var startCmd = &cobra.Command{
 		// Start listening for connections (both local and remote modes)
 		if mode == config.ModeLocal {
 			log.Info("Starting listener in local mode")
-			if err := gatewayClient.StartListening(ctx, log, portFlag); err != nil {
+			if err := gatewayClient.StartListening(ctx, log, portFlag, tunnelResp); err != nil {
 				return fmt.Errorf("listener error: %w", err)
 			}
 		} else {
