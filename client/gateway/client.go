@@ -67,7 +67,7 @@ func NewClient(opts *Options) *Client {
 	}
 
 	mode := opts.Mode
-	if mode == "" {
+	if mode == config.Mode("") {
 		mode = config.ModeRemote
 	}
 

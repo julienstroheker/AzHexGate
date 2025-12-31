@@ -7,6 +7,12 @@ import (
 	"github.com/julienstroheker/AzHexGate/gateway/tunnel"
 )
 
+const (
+	// defaultLocalPort is the default port used when no port is specified in the request
+	// TODO: Parse localPort from request body instead of using this default
+	defaultLocalPort = 3000
+)
+
 // NewTunnelsHandler creates a handler for tunnel creation requests
 func NewTunnelsHandler(manager *tunnel.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -23,8 +29,8 @@ func NewTunnelsHandler(manager *tunnel.Manager) http.HandlerFunc {
 		}
 
 		// TODO: Parse localPort from request body
-		// For now, use default port 3000
-		localPort := 3000
+		// For now, use default port
+		localPort := defaultLocalPort
 
 		// Create tunnel using manager
 		response, err := manager.CreateTunnel(r.Context(), localPort)
