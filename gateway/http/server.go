@@ -55,7 +55,7 @@ func NewServer(opts *Options) *Server {
 	return &Server{
 		server: &http.Server{
 			Addr:              fmt.Sprintf(":%d", opts.Port),
-			Handler:           mux,
+			Handler:           handler,
 			ReadHeaderTimeout: 10 * time.Second,
 		},
 		port:    opts.Port,

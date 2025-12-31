@@ -12,6 +12,7 @@ import (
 	"github.com/julienstroheker/AzHexGate/internal/api"
 	"github.com/julienstroheker/AzHexGate/internal/config"
 	"github.com/julienstroheker/AzHexGate/internal/httpclient"
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 func TestNewClient(t *testing.T) {
@@ -39,6 +40,7 @@ func TestNewClientWithOptions(t *testing.T) {
 }
 
 func TestCreateTunnelSuccess(t *testing.T) {
+	logger := logging.New(logging.DebugLevel)
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request
@@ -70,7 +72,7 @@ func TestCreateTunnelSuccess(t *testing.T) {
 	client := NewClient(opts)
 
 	ctx := context.Background()
-	resp, err := client.CreateTunnel(ctx, 3000)
+	resp, err := client.CreateTunnel(ctx, logger, 3000)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -81,6 +83,7 @@ func TestCreateTunnelSuccess(t *testing.T) {
 }
 
 func TestCreateTunnelHTTPError(t *testing.T) {
+	logger := logging.New(logging.DebugLevel)
 	// Create mock server that returns error
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -95,7 +98,7 @@ func TestCreateTunnelHTTPError(t *testing.T) {
 	client := NewClient(opts)
 
 	ctx := context.Background()
-	_, err := client.CreateTunnel(ctx, 3000)
+	_, err := client.CreateTunnel(ctx, logger, 3000)
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
@@ -106,6 +109,7 @@ func TestCreateTunnelHTTPError(t *testing.T) {
 }
 
 func TestCreateTunnelInvalidJSON(t *testing.T) {
+	logger := logging.New(logging.DebugLevel)
 	// Create mock server that returns invalid JSON
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -120,7 +124,7 @@ func TestCreateTunnelInvalidJSON(t *testing.T) {
 	client := NewClient(opts)
 
 	ctx := context.Background()
-	_, err := client.CreateTunnel(ctx, 3000)
+	_, err := client.CreateTunnel(ctx, logger, 3000)
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
@@ -131,6 +135,7 @@ func TestCreateTunnelInvalidJSON(t *testing.T) {
 }
 
 func TestCreateTunnelWithMockTransport(t *testing.T) {
+	logger := logging.New(logging.DebugLevel)
 	// Create a mock transport
 	mockTransport := &MockTransport{
 		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
@@ -165,7 +170,7 @@ func TestCreateTunnelWithMockTransport(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	resp, err := apiClient.CreateTunnel(ctx, 3000)
+	resp, err := apiClient.CreateTunnel(ctx, logger, 3000)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}

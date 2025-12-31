@@ -47,7 +47,7 @@ var startCmd = &cobra.Command{
 
 		// Call Gateway API to create tunnel
 		ctx := context.Background()
-		tunnelResp, err := gatewayClient.CreateTunnel(ctx, portFlag)
+		tunnelResp, err := gatewayClient.CreateTunnel(ctx, log, portFlag)
 		if err != nil {
 			return fmt.Errorf("failed to create tunnel: %w", err)
 		}
@@ -64,7 +64,7 @@ var startCmd = &cobra.Command{
 		// Start listening for connections (both local and remote modes)
 		if mode == config.ModeLocal {
 			log.Info("Starting listener in local mode")
-			if err := gatewayClient.StartListening(ctx, portFlag); err != nil {
+			if err := gatewayClient.StartListening(ctx, log, portFlag); err != nil {
 				return fmt.Errorf("listener error: %w", err)
 			}
 		} else {
