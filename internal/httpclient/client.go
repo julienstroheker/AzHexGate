@@ -84,20 +84,21 @@ func NewClient(opts *Options) *Client {
 		}))
 	}
 
-	// Logging policy (only if logger is provided)
-	if opts.Logger != nil {
-		policies = append(policies, NewLoggingPolicy(opts.Logger, &LoggingOptions{
-			LogHeaders: true,
-			LogBody:    true,
-		}))
-	}
-
-	// Request ID policy
+	// Request ID policy (must be before logging to see the ID in logs)
 	policies = append(policies, NewDefaultRequestIDPolicy())
 
 	// User Agent policy
 	if opts.UserAgent != "" {
 		policies = append(policies, NewUserAgentPolicy(opts.UserAgent))
+	}
+
+	// Logging policy (only if logger is provided)
+	// This should be last so it logs after all other policies have modified the request
+	if opts.Logger != nil {
+		policies = append(policies, NewLoggingPolicy(opts.Logger, &LoggingOptions{
+			LogHeaders: true,
+			LogBody:    true,
+		}))
 	}
 
 	// Add custom policies

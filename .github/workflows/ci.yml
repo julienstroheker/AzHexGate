@@ -156,3 +156,96 @@ jobs:
       
       - name: Run tests
         run: go test ./...
+      
+      - name: Integration test - CLI with gateway (success path)
+        run: |
+          echo "Starting gateway server in background..."
+          ./gateway-server start --port 8080 &
+          GATEWAY_PID=$!
+          echo "Gateway PID: $GATEWAY_PID"
+          
+          # Wait for server to start
+          echo "Waiting for server to start..."
+          sleep 2
+          
+          # Test CLI with verbose mode to see request ID and full logs
+          echo "Testing CLI start command with verbose mode:"
+          OUTPUT=$(./azhexgate start -p 3000 --api-url http://localhost:8080 -v 2>&1)
+          echo "$OUTPUT"
+          
+          # Verify request ID header is present in logs
+          if ! echo "$OUTPUT" | grep -q "X-Client-Request-Id"; then
+            echo "ERROR: Request ID header not found in logs"
+            kill $GATEWAY_PID
+            exit 1
+          fi
+          echo "✓ Request ID header found in logs"
+          
+          # Verify request and response logging
+          if ! echo "$OUTPUT" | grep -q "HTTP Request"; then
+            echo "ERROR: HTTP Request log not found"
+            kill $GATEWAY_PID
+            exit 1
+          fi
+          echo "✓ HTTP Request logged"
+          
+          if ! echo "$OUTPUT" | grep -q "HTTP Response"; then
+            echo "ERROR: HTTP Response log not found"
+            kill $GATEWAY_PID
+            exit 1
+          fi
+          echo "✓ HTTP Response logged"
+          
+          # Verify tunnel established
+          if ! echo "$OUTPUT" | grep -q "Tunnel established"; then
+            echo "ERROR: Tunnel not established"
+            kill $GATEWAY_PID
+            exit 1
+          fi
+          echo "✓ Tunnel established successfully"
+          
+          # Verify public URL printed
+          if ! echo "$OUTPUT" | grep -q "Public URL:"; then
+            echo "ERROR: Public URL not printed"
+            kill $GATEWAY_PID
+            exit 1
+          fi
+          echo "✓ Public URL printed"
+          
+          # Clean up
+          kill $GATEWAY_PID
+          echo "Integration test (success path) passed!"
+      
+      - name: Integration test - CLI with gateway (retry on failure)
+        run: |
+          echo "Testing CLI with wrong gateway URL to verify retries..."
+          
+          # Use a port that doesn't have a server running
+          OUTPUT=$(timeout 30 ./azhexgate start -p 3000 --api-url http://localhost:9999 -v 2>&1 || true)
+          echo "$OUTPUT"
+          
+          # Verify retry attempts are logged
+          if ! echo "$OUTPUT" | grep -q "Retrying request"; then
+            echo "ERROR: Retry attempts not found in logs"
+            exit 1
+          fi
+          echo "✓ Retry attempts logged"
+          
+          # Count retry attempts (should see multiple)
+          RETRY_COUNT=$(echo "$OUTPUT" | grep -c "Retrying request" || true)
+          echo "Found $RETRY_COUNT retry attempts"
+          
+          if [ "$RETRY_COUNT" -lt 2 ]; then
+            echo "ERROR: Expected at least 2 retry attempts, found $RETRY_COUNT"
+            exit 1
+          fi
+          echo "✓ Multiple retry attempts detected"
+          
+          # Verify request ID is still present during retries
+          if ! echo "$OUTPUT" | grep "Retrying request" | grep -q "X-Client-Request-Id"; then
+            echo "ERROR: Request ID not found in retry logs"
+            exit 1
+          fi
+          echo "✓ Request ID present in retry logs"
+          
+          echo "Integration test (retry on failure) passed!"
