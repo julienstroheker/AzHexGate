@@ -19,7 +19,8 @@ type TunnelResponse struct {
 // TunnelsHandler handles POST requests to create new tunnels
 // This is a mock implementation that returns static data
 func TunnelsHandler(w http.ResponseWriter, r *http.Request) {
-	// Retrieve logger from context to establish the pattern
+	// Retrieve logger from context to establish the pattern for future handlers
+	// Will be used for actual logging when real tunnel creation logic is implemented
 	_ = logging.FromContext(r.Context())
 
 	// Only accept POST requests
