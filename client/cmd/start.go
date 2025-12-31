@@ -64,8 +64,7 @@ var startCmd = &cobra.Command{
 		// TODO: In production, create Azure Relay listener using tunnelResp.RelayEndpoint,
 		// tunnelResp.HybridConnectionName, and tunnelResp.ListenerToken
 		// For now, create an in-memory relay listener for testing
-		var relayListener relay.Listener
-		relayListener = relay.NewMemoryListener()
+		relayListener := relay.NewMemoryListener()
 		defer func() { _ = relayListener.Close() }()
 
 		// Create tunnel listener

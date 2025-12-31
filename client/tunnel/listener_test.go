@@ -159,7 +159,10 @@ if resp.StatusCode != http.StatusOK {
 t.Errorf("Expected status 200, got %d", resp.StatusCode)
 }
 
-body, _ := io.ReadAll(resp.Body)
+body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read body: %v", err)
+	}
 if string(body) != postBody {
 t.Errorf("Expected body %q, got %q", postBody, string(body))
 }
@@ -290,9 +293,10 @@ var mu sync.Mutex
 localServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 mu.Lock()
 requestCount++
+count := requestCount
 mu.Unlock()
 w.WriteHeader(http.StatusOK)
-_, _ = w.Write([]byte(fmt.Sprintf("Request #%d", requestCount)))
+_, _ = w.Write([]byte(fmt.Sprintf("Request #%d", count)))
 }))
 defer localServer.Close()
 
