@@ -1,172 +1,172 @@
 package tunnel
 
 import (
-"bufio"
-"context"
-"fmt"
-"io"
-"net/http"
-"strings"
+	"bufio"
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 
-"github.com/julienstroheker/AzHexGate/internal/logging"
-"github.com/julienstroheker/AzHexGate/internal/relay"
+	"github.com/julienstroheker/AzHexGate/internal/logging"
+	"github.com/julienstroheker/AzHexGate/internal/relay"
 )
 
 // Listener handles incoming connections from the relay and forwards them to localhost
 type Listener struct {
-relay      relay.Listener
-localAddr  string
-httpClient *http.Client
-logger     *logging.Logger
+	relay      relay.Listener
+	localAddr  string
+	httpClient *http.Client
+	logger     *logging.Logger
 }
 
 // Options contains configuration for the Listener
 type Options struct {
-// Relay is the relay listener to accept connections from
-Relay relay.Listener
+	// Relay is the relay listener to accept connections from
+	Relay relay.Listener
 
-// LocalAddr is the address of the local HTTP server (e.g., "localhost:3000")
-LocalAddr string
+	// LocalAddr is the address of the local HTTP server (e.g., "localhost:3000")
+	LocalAddr string
 
-// HTTPClient is used to make requests to the local server (optional)
-HTTPClient *http.Client
+	// HTTPClient is used to make requests to the local server (optional)
+	HTTPClient *http.Client
 
-// Logger is used for debug logging (optional)
-Logger *logging.Logger
+	// Logger is used for debug logging (optional)
+	Logger *logging.Logger
 }
 
 // NewListener creates a new tunnel listener
 func NewListener(opts *Options) *Listener {
-if opts == nil {
-opts = &Options{}
-}
+	if opts == nil {
+		opts = &Options{}
+	}
 
-httpClient := opts.HTTPClient
-if httpClient == nil {
-httpClient = &http.Client{}
-}
+	httpClient := opts.HTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{}
+	}
 
-return &Listener{
-relay:      opts.Relay,
-localAddr:  opts.LocalAddr,
-httpClient: httpClient,
-logger:     opts.Logger,
-}
+	return &Listener{
+		relay:      opts.Relay,
+		localAddr:  opts.LocalAddr,
+		httpClient: httpClient,
+		logger:     opts.Logger,
+	}
 }
 
 // Start begins the listener loop, accepting connections and forwarding requests
 func (l *Listener) Start(ctx context.Context) error {
-if l.logger != nil {
-l.logger.Info("Starting listener loop", logging.String("local_addr", l.localAddr))
-}
+	if l.logger != nil {
+		l.logger.Info("Starting listener loop", logging.String("local_addr", l.localAddr))
+	}
 
-for {
-select {
-case <-ctx.Done():
-if l.logger != nil {
-l.logger.Info("Listener loop stopped")
-}
-return ctx.Err()
-default:
-}
+	for {
+		select {
+		case <-ctx.Done():
+			if l.logger != nil {
+				l.logger.Info("Listener loop stopped")
+			}
+			return ctx.Err()
+		default:
+		}
 
-// Accept incoming connection from relay
-conn, err := l.relay.Accept(ctx)
-if err != nil {
-if ctx.Err() != nil {
-// Context cancelled, stop gracefully
-return ctx.Err()
-}
-if l.logger != nil {
-l.logger.Error("Failed to accept connection", logging.Error(err))
-}
-continue
-}
+		// Accept incoming connection from relay
+		conn, err := l.relay.Accept(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				// Context cancelled, stop gracefully
+				return ctx.Err()
+			}
+			if l.logger != nil {
+				l.logger.Error("Failed to accept connection", logging.Error(err))
+			}
+			continue
+		}
 
-// Handle connection in a separate goroutine
-go l.handleConnection(ctx, conn)
-}
+		// Handle connection in a separate goroutine
+		go l.handleConnection(ctx, conn)
+	}
 }
 
 // handleConnection processes a single relay connection
 func (l *Listener) handleConnection(ctx context.Context, conn relay.Connection) {
-defer func() {
-_ = conn.Close()
-}()
+	defer func() {
+		_ = conn.Close()
+	}()
 
-if l.logger != nil {
-l.logger.Debug("Handling new connection")
-}
+	if l.logger != nil {
+		l.logger.Debug("Handling new connection")
+	}
 
-// Parse HTTP request from the connection
-req, err := http.ReadRequest(bufio.NewReader(conn))
-if err != nil {
-if l.logger != nil {
-l.logger.Error("Failed to parse HTTP request", logging.Error(err))
-}
-return
-}
+	// Parse HTTP request from the connection
+	req, err := http.ReadRequest(bufio.NewReader(conn))
+	if err != nil {
+		if l.logger != nil {
+			l.logger.Error("Failed to parse HTTP request", logging.Error(err))
+		}
+		return
+	}
 
-// Update request URL to point to local server
-req.URL.Scheme = "http"
-req.URL.Host = l.localAddr
-req.RequestURI = "" // Must be cleared for client requests
+	// Update request URL to point to local server
+	req.URL.Scheme = "http"
+	req.URL.Host = l.localAddr
+	req.RequestURI = "" // Must be cleared for client requests
 
-// Forward request to local server
-if l.logger != nil {
-l.logger.Debug("Forwarding request to local server",
-logging.String("method", req.Method),
-logging.String("path", req.URL.Path))
-}
+	// Forward request to local server
+	if l.logger != nil {
+		l.logger.Debug("Forwarding request to local server",
+			logging.String("method", req.Method),
+			logging.String("path", req.URL.Path))
+	}
 
-resp, err := l.httpClient.Do(req.WithContext(ctx))
-if err != nil {
-if l.logger != nil {
-l.logger.Error("Failed to forward request to local server", logging.Error(err))
-}
-// Write error response back to relay
-_ = l.writeErrorResponse(conn, http.StatusBadGateway, "Failed to reach local server")
-return
-}
-defer func() {
-_ = resp.Body.Close()
-}()
+	resp, err := l.httpClient.Do(req.WithContext(ctx))
+	if err != nil {
+		if l.logger != nil {
+			l.logger.Error("Failed to forward request to local server", logging.Error(err))
+		}
+		// Write error response back to relay
+		_ = l.writeErrorResponse(conn, http.StatusBadGateway, "Failed to reach local server")
+		return
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
-// Write response back to relay connection
-if err := resp.Write(conn); err != nil {
-if l.logger != nil {
-l.logger.Error("Failed to write response to relay", logging.Error(err))
-}
-return
-}
+	// Write response back to relay connection
+	if err := resp.Write(conn); err != nil {
+		if l.logger != nil {
+			l.logger.Error("Failed to write response to relay", logging.Error(err))
+		}
+		return
+	}
 
-if l.logger != nil {
-l.logger.Debug("Request completed",
-logging.Int("status", resp.StatusCode))
-}
+	if l.logger != nil {
+		l.logger.Debug("Request completed",
+			logging.Int("status", resp.StatusCode))
+	}
 }
 
 // writeErrorResponse writes an HTTP error response to the connection
 func (l *Listener) writeErrorResponse(w io.Writer, statusCode int, message string) error {
-resp := &http.Response{
-StatusCode:    statusCode,
-Status:        fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
-Proto:         "HTTP/1.1",
-ProtoMajor:    1,
-ProtoMinor:    1,
-Header:        make(http.Header),
-Body:          io.NopCloser(strings.NewReader(message)),
-ContentLength: int64(len(message)),
-}
-resp.Header.Set("Content-Type", "text/plain")
+	resp := &http.Response{
+		StatusCode:    statusCode,
+		Status:        fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader(message)),
+		ContentLength: int64(len(message)),
+	}
+	resp.Header.Set("Content-Type", "text/plain")
 
-return resp.Write(w)
+	return resp.Write(w)
 }
 
 // Close closes the listener
 func (l *Listener) Close() error {
-if l.relay != nil {
-return l.relay.Close()
-}
-return nil
+	if l.relay != nil {
+		return l.relay.Close()
+	}
+	return nil
 }
