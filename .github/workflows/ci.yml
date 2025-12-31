@@ -241,11 +241,14 @@ jobs:
           fi
           echo "✓ Multiple retry attempts detected"
           
-          # Verify request ID is still present during retries
-          if ! echo "$OUTPUT" | grep "Retrying request" | grep -q "X-Client-Request-Id"; then
-            echo "ERROR: Request ID not found in retry logs"
+          # Verify request ID is present in request logs (multiple times for retries)
+          REQUEST_ID_COUNT=$(echo "$OUTPUT" | grep "HTTP Request" | grep -c "X-Client-Request-Id" || true)
+          echo "Found $REQUEST_ID_COUNT HTTP requests with Request ID"
+          
+          if [ "$REQUEST_ID_COUNT" -lt 2 ]; then
+            echo "ERROR: Expected at least 2 HTTP requests with Request ID, found $REQUEST_ID_COUNT"
             exit 1
           fi
-          echo "✓ Request ID present in retry logs"
+          echo "✓ Request ID present across retry attempts"
           
           echo "Integration test (retry on failure) passed!"
