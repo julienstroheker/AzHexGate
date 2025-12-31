@@ -5,11 +5,14 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 func TestNewServer(t *testing.T) {
 	port := 9999
-	server := NewServer(port)
+	logger := logging.New(logging.InfoLevel)
+	server := NewServer(port, logger)
 
 	if server == nil {
 		t.Fatal("Expected server to be created, got nil")
@@ -30,7 +33,8 @@ func TestNewServer(t *testing.T) {
 
 func TestServerLifecycle(t *testing.T) {
 	port := 9998
-	server := NewServer(port)
+	logger := logging.New(logging.InfoLevel)
+	server := NewServer(port, logger)
 
 	// Start server in a goroutine
 	serverErrors := make(chan error, 1)
@@ -75,7 +79,8 @@ func TestServerLifecycle(t *testing.T) {
 
 func TestServerShutdownTimeout(t *testing.T) {
 	port := 9997
-	server := NewServer(port)
+	logger := logging.New(logging.InfoLevel)
+	server := NewServer(port, logger)
 
 	// Start server
 	go func() {
@@ -100,7 +105,8 @@ func TestServerShutdownTimeout(t *testing.T) {
 
 func TestServerClose(t *testing.T) {
 	port := 9996
-	server := NewServer(port)
+	logger := logging.New(logging.InfoLevel)
+	server := NewServer(port, logger)
 
 	// Start server
 	go func() {

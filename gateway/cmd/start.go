@@ -43,8 +43,8 @@ func runServer() error {
 	log := GetLogger()
 	log.Info("Starting gateway server", logging.Int("port", portFlag))
 
-	// Create server
-	server := http.NewServer(portFlag)
+	// Create server with the logger from root command
+	server := http.NewServer(portFlag, log)
 
 	// Channel to listen for errors coming from the listener.
 	serverErrors := make(chan error, 1)

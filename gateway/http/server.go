@@ -7,16 +7,19 @@ import (
 	"time"
 
 	"github.com/julienstroheker/AzHexGate/gateway/http/handlers"
+	"github.com/julienstroheker/AzHexGate/gateway/http/middleware"
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 // Server represents the HTTP server
 type Server struct {
 	server *http.Server
 	port   int
+	logger *logging.Logger
 }
 
 // NewServer creates a new HTTP server instance
-func NewServer(port int) *Server {
+func NewServer(port int, logger *logging.Logger) *Server {
 	mux := http.NewServeMux()
 
 	// Register health check endpoint
@@ -25,13 +28,23 @@ func NewServer(port int) *Server {
 	// Register management API endpoints
 	mux.HandleFunc("/api/tunnels", handlers.TunnelsHandler)
 
+	// Chain middlewares: Telemetry -> Logger -> Metrics -> handlers
+	// Telemetry is first to ensure all requests get tracking IDs
+	// Logger is second to log requests with telemetry IDs
+	// Metrics is third as a placeholder for future metrics collection
+	var handler http.Handler = mux
+	handler = middleware.Metrics(handler)
+	handler = middleware.Logger(logger)(handler)
+	handler = middleware.Telemetry(handler)
+
 	return &Server{
 		server: &http.Server{
 			Addr:              fmt.Sprintf(":%d", port),
-			Handler:           mux,
+			Handler:           handler,
 			ReadHeaderTimeout: 10 * time.Second,
 		},
-		port: port,
+		port:   port,
+		logger: logger,
 	}
 }
 

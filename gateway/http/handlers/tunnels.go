@@ -5,11 +5,16 @@ import (
 	"net/http"
 
 	"github.com/julienstroheker/AzHexGate/internal/api"
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 // TunnelsHandler handles POST requests to create new tunnels
 // This is a mock implementation that returns static data
 func TunnelsHandler(w http.ResponseWriter, r *http.Request) {
+	// Retrieve logger from context to establish the pattern for future handlers
+	// Will be used for actual logging when real tunnel creation logic is implemented
+	_ = logging.FromContext(r.Context())
+
 	// Only accept POST requests
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)

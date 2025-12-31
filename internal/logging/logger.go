@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -70,6 +71,7 @@ type Logger struct {
 	level  Level
 	format Format
 	output io.Writer
+	fields []Field // Persistent fields attached to this logger
 }
 
 // New creates a new Logger with the specified level and console format
@@ -104,6 +106,26 @@ func (l *Logger) SetLevel(level Level) {
 	l.level = level
 }
 
+// With creates a new Logger with additional fields attached
+// The new logger inherits all settings and existing fields from the parent
+func (l *Logger) With(fields ...Field) *Logger {
+	// Create a new logger with the same settings
+	newLogger := &Logger{
+		level:  l.level,
+		format: l.format,
+		output: l.output,
+		fields: make([]Field, 0, len(l.fields)+len(fields)),
+	}
+
+	// Copy existing fields
+	newLogger.fields = append(newLogger.fields, l.fields...)
+
+	// Add new fields
+	newLogger.fields = append(newLogger.fields, fields...)
+
+	return newLogger
+}
+
 // Debug logs a debug message with optional fields
 func (l *Logger) Debug(msg string, fields ...Field) {
 	l.log(DebugLevel, msg, fields...)
@@ -130,10 +152,15 @@ func (l *Logger) log(level Level, msg string, fields ...Field) {
 		return
 	}
 
+	// Combine persistent fields with call-specific fields
+	allFields := make([]Field, 0, len(l.fields)+len(fields))
+	allFields = append(allFields, l.fields...)
+	allFields = append(allFields, fields...)
+
 	if l.format == FormatJSON {
-		l.logJSON(level, msg, fields...)
+		l.logJSON(level, msg, allFields...)
 	} else {
-		l.logConsole(level, msg, fields...)
+		l.logConsole(level, msg, allFields...)
 	}
 }
 
@@ -220,4 +247,22 @@ func Error(err error) Field {
 // Any creates a Field with any value
 func Any(key string, value any) Field {
 	return Field{Key: key, Value: value}
+}
+
+// loggerKey is a custom type for context key to avoid collisions
+type loggerKey struct{}
+
+// WithContext stores the logger in the context
+func WithContext(ctx context.Context, logger *Logger) context.Context {
+	return context.WithValue(ctx, loggerKey{}, logger)
+}
+
+// FromContext retrieves the logger from the context
+// Returns the logger if found, or a default logger if not
+func FromContext(ctx context.Context) *Logger {
+	if logger, ok := ctx.Value(loggerKey{}).(*Logger); ok {
+		return logger
+	}
+	// Return a default logger if not found in context
+	return New(InfoLevel)
 }
