@@ -81,9 +81,6 @@ func Logger(logger *logging.Logger) func(http.Handler) http.Handler {
 			// Call next handler
 			next.ServeHTTP(rw, r)
 
-			// Retrieve logger again in case it was modified by handlers
-			currentLogger = GetLogger(ctx)
-
 			// Calculate response time
 			duration := time.Since(start)
 
