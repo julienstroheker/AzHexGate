@@ -13,7 +13,6 @@ import (
 type Listener struct {
 	relay     relay.Listener
 	localAddr string
-	logger    *logging.Logger
 }
 
 // Options contains configuration for the Listener
@@ -23,9 +22,6 @@ type Options struct {
 
 	// LocalAddr is the address of the local HTTP server (e.g., "localhost:3000")
 	LocalAddr string
-
-	// Logger is used for debug logging (optional)
-	Logger *logging.Logger
 }
 
 // NewListener creates a new tunnel listener
@@ -37,21 +33,20 @@ func NewListener(opts *Options) *Listener {
 	return &Listener{
 		relay:     opts.Relay,
 		localAddr: opts.LocalAddr,
-		logger:    opts.Logger,
 	}
 }
 
 // Start begins the listener loop, accepting connections and forwarding requests
-func (l *Listener) Start(ctx context.Context) error {
-	if l.logger != nil {
-		l.logger.Info("Starting listener loop", logging.String("local_addr", l.localAddr))
+func (l *Listener) Start(ctx context.Context, logger *logging.Logger) error {
+	if logger != nil {
+		logger.Info("Starting listener loop", logging.String("local_addr", l.localAddr))
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			if l.logger != nil {
-				l.logger.Info("Listener loop stopped")
+			if logger != nil {
+				logger.Info("Listener loop stopped")
 			}
 			return ctx.Err()
 		default:
@@ -64,34 +59,34 @@ func (l *Listener) Start(ctx context.Context) error {
 				// Context cancelled, stop gracefully
 				return ctx.Err()
 			}
-			if l.logger != nil {
-				l.logger.Error("Failed to accept connection", logging.Error(err))
+			if logger != nil {
+				logger.Error("Failed to accept connection", logging.Error(err))
 			}
 			continue
 		}
 
 		// Handle connection in a separate goroutine
-		go l.handleConnection(ctx, relayConn)
+		go l.handleConnection(ctx, relayConn, logger)
 	}
 }
 
 // handleConnection processes a single relay connection by establishing a TCP connection
 // to the local server and bidirectionally copying data between them
-func (l *Listener) handleConnection(ctx context.Context, relayConn relay.Connection) {
+func (l *Listener) handleConnection(ctx context.Context, relayConn relay.Connection, logger *logging.Logger) {
 	defer func() {
 		_ = relayConn.Close()
 	}()
 
-	if l.logger != nil {
-		l.logger.Debug("Handling new connection")
+	if logger != nil {
+		logger.Debug("Handling new connection")
 	}
 
 	// Dial the local TCP server
 	var dialer net.Dialer
 	localConn, err := dialer.DialContext(ctx, "tcp", l.localAddr)
 	if err != nil {
-		if l.logger != nil {
-			l.logger.Error("Failed to dial local server", logging.Error(err))
+		if logger != nil {
+			logger.Error("Failed to dial local server", logging.Error(err))
 		}
 		return
 	}
@@ -99,8 +94,8 @@ func (l *Listener) handleConnection(ctx context.Context, relayConn relay.Connect
 		_ = localConn.Close()
 	}()
 
-	if l.logger != nil {
-		l.logger.Debug("Connected to local server")
+	if logger != nil {
+		logger.Debug("Connected to local server")
 	}
 
 	// Bidirectional copy between relay and local server
@@ -121,11 +116,11 @@ func (l *Listener) handleConnection(ctx context.Context, relayConn relay.Connect
 	// Wait for one direction to complete
 	err = <-done
 
-	if l.logger != nil {
+	if logger != nil {
 		if err != nil && err != io.EOF {
-			l.logger.Debug("Connection closed with error", logging.Error(err))
+			logger.Debug("Connection closed with error", logging.Error(err))
 		} else {
-			l.logger.Debug("Connection completed successfully")
+			logger.Debug("Connection completed successfully")
 		}
 	}
 

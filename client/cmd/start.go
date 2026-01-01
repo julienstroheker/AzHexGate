@@ -72,14 +72,13 @@ var startCmd = &cobra.Command{
 		tunnelListener := tunnel.NewListener(&tunnel.Options{
 			Relay:     relayListener,
 			LocalAddr: localAddr,
-			Logger:    log,
 		})
 		defer func() { _ = tunnelListener.Close() }()
 
 		// Start the listener loop in a goroutine
 		errChan := make(chan error, 1)
 		go func() {
-			if err := tunnelListener.Start(ctx); err != nil && err != context.Canceled {
+			if err := tunnelListener.Start(ctx, log); err != nil && err != context.Canceled {
 				errChan <- err
 			}
 		}()

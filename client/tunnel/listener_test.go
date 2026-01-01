@@ -47,7 +47,7 @@ func setupTestEnvironment(t *testing.T, handler http.HandlerFunc) (
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_ = listener.Start(ctx)
+		_ = listener.Start(ctx, nil)
 	}()
 
 	return
@@ -187,7 +187,7 @@ func TestListener_LocalServerError(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_ = listener.Start(ctx)
+		_ = listener.Start(ctx, nil)
 	}()
 
 	// Send request
@@ -241,7 +241,7 @@ func TestListener_LocalServerUnreachable(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_ = listener.Start(ctx)
+		_ = listener.Start(ctx, nil)
 	}()
 
 	// Give listener time to start
@@ -351,7 +351,7 @@ func TestListener_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	err := listener.Start(ctx)
+	err := listener.Start(ctx, nil)
 	if err != context.DeadlineExceeded {
 		t.Errorf("Expected context.DeadlineExceeded, got %v", err)
 	}
@@ -385,7 +385,7 @@ func TestListener_InvalidHTTPRequest(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_ = listener.Start(ctx)
+		_ = listener.Start(ctx, nil)
 	}()
 
 	// Send invalid HTTP request
