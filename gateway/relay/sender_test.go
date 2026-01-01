@@ -22,7 +22,6 @@ const testHTTPRequest = "GET /test HTTP/1.1\r\nHost: example.com\r\n\r\n"
 func setupTestEnvironment(t *testing.T, handler http.HandlerFunc) (
 	localServer *httptest.Server,
 	sender *Sender,
-	memoryListener *relay.MemoryListener,
 	ctx context.Context,
 	cancel context.CancelFunc,
 	wg *sync.WaitGroup,
@@ -33,7 +32,7 @@ func setupTestEnvironment(t *testing.T, handler http.HandlerFunc) (
 	localServer = httptest.NewServer(handler)
 
 	// Create in-memory relay
-	memoryListener = relay.NewMemoryListener()
+	memoryListener := relay.NewMemoryListener()
 	memorySender := relay.NewMemorySender(memoryListener)
 
 	// Create relay sender
@@ -47,62 +46,73 @@ func setupTestEnvironment(t *testing.T, handler http.HandlerFunc) (
 	// Start listener that simulates local client behavior
 	wg = &sync.WaitGroup{}
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-
-			// Accept incoming connection from relay
-			relayConn, err := memoryListener.Accept(ctx)
-			if err != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				continue
-			}
-
-			// Handle connection
-			go func(conn relay.Connection) {
-				defer func() { _ = conn.Close() }()
-
-				// Dial the local TCP server
-				var dialer net.Dialer
-				localConn, err := dialer.DialContext(ctx, "tcp", strings.TrimPrefix(localServer.URL, "http://"))
-				if err != nil {
-					return
-				}
-				defer func() { _ = localConn.Close() }()
-
-				// Bidirectional copy between relay and local server
-				done := make(chan error, 2)
-
-				go func() {
-					_, err := io.Copy(localConn, conn)
-					done <- err
-				}()
-
-				go func() {
-					_, err := io.Copy(conn, localConn)
-					done <- err
-				}()
-
-				<-done
-				_ = conn.Close()
-				_ = localConn.Close()
-				<-done
-			}(relayConn)
-		}
-	}()
+	go startListenerLoop(ctx, memoryListener, localServer.URL, wg)
 
 	return
 }
 
+// startListenerLoop runs the listener loop that accepts connections and forwards to local server
+func startListenerLoop(ctx context.Context, memoryListener *relay.MemoryListener, localURL string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		// Accept incoming connection from relay
+		relayConn, err := memoryListener.Accept(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			continue
+		}
+
+		// Handle connection
+		go handleRelayConnection(ctx, relayConn, localURL)
+	}
+}
+
+// handleRelayConnection handles a single relay connection by forwarding to local server
+func handleRelayConnection(ctx context.Context, conn relay.Connection, localURL string) {
+	defer func() { _ = conn.Close() }()
+
+	// Dial the local TCP server
+	var dialer net.Dialer
+	localConn, err := dialer.DialContext(ctx, "tcp", strings.TrimPrefix(localURL, "http://"))
+	if err != nil {
+		return
+	}
+	defer func() { _ = localConn.Close() }()
+
+	// Bidirectional copy between relay and local server
+	done := make(chan error, 2)
+
+	go func() {
+		_, err := io.Copy(localConn, conn)
+		done <- err
+	}()
+
+	go func() {
+		_, err := io.Copy(conn, localConn)
+		done <- err
+	}()
+
+	<-done
+	_ = conn.Close()
+	_ = localConn.Close()
+	<-done
+}
+
 // cleanupTestEnvironment cleans up test resources
-func cleanupTestEnvironment(localServer *httptest.Server, sender *Sender, cancel context.CancelFunc, wg *sync.WaitGroup) {
+func cleanupTestEnvironment(
+	localServer *httptest.Server,
+	sender *Sender,
+	cancel context.CancelFunc,
+	wg *sync.WaitGroup,
+) {
 	cancel()
 	wg.Wait()
 	_ = sender.Close()
@@ -110,7 +120,7 @@ func cleanupTestEnvironment(localServer *httptest.Server, sender *Sender, cancel
 }
 
 func TestSender_ForwardRequestGET(t *testing.T) {
-	localServer, sender, _, ctx, cancel, wg := setupTestEnvironment(t,
+	localServer, sender, ctx, cancel, wg := setupTestEnvironment(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("Hello from local server"))
@@ -157,7 +167,7 @@ func TestSender_ForwardRequestGET(t *testing.T) {
 }
 
 func TestSender_ForwardRequestPOST(t *testing.T) {
-	localServer, sender, _, ctx, cancel, wg := setupTestEnvironment(t,
+	localServer, sender, ctx, cancel, wg := setupTestEnvironment(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				w.WriteHeader(http.StatusMethodNotAllowed)
@@ -214,7 +224,7 @@ func TestSender_ForwardRequestPOST(t *testing.T) {
 }
 
 func TestSender_ForwardRequestLocalServerError(t *testing.T) {
-	localServer, sender, _, ctx, cancel, wg := setupTestEnvironment(t,
+	localServer, sender, ctx, cancel, wg := setupTestEnvironment(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("Internal server error"))
@@ -277,7 +287,7 @@ func TestSender_ForwardRequestListenerOffline(t *testing.T) {
 func TestSender_ForwardRequestMultipleRequests(t *testing.T) {
 	requestCount := 0
 	var mu sync.Mutex
-	localServer, sender, _, ctx, cancel, wg := setupTestEnvironment(t,
+	localServer, sender, ctx, cancel, wg := setupTestEnvironment(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			mu.Lock()
 			requestCount++
@@ -333,7 +343,7 @@ func TestSender_ForwardRequestMultipleRequests(t *testing.T) {
 }
 
 func TestSender_ForwardRequestWithHeaders(t *testing.T) {
-	localServer, sender, _, ctx, cancel, wg := setupTestEnvironment(t,
+	localServer, sender, ctx, cancel, wg := setupTestEnvironment(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Echo the custom header back
 			customHeader := r.Header.Get("X-Custom-Header")
@@ -383,7 +393,7 @@ func TestSender_ForwardRequestWithHeaders(t *testing.T) {
 }
 
 func TestSender_ForwardRequestRaw(t *testing.T) {
-	localServer, sender, _, ctx, cancel, wg := setupTestEnvironment(t,
+	localServer, sender, ctx, cancel, wg := setupTestEnvironment(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("Hello via raw forwarding"))
