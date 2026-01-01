@@ -170,8 +170,21 @@ jobs:
           
           # Test CLI with verbose mode to see request ID and full logs
           echo "Testing CLI start command with verbose mode:"
-          OUTPUT=$(./azhexgate start -p 3000 --api-url http://localhost:8080 -v 2>&1)
+          
+          # Run CLI in background and capture output to a file
+          ./azhexgate start -p 3000 --api-url http://localhost:8080 -v > /tmp/cli_output.log 2>&1 &
+          CLI_PID=$!
+          echo "CLI PID: $CLI_PID"
+          
+          # Wait for CLI to establish tunnel and print output
+          sleep 3
+          
+          # Read the output
+          OUTPUT=$(cat /tmp/cli_output.log)
           echo "$OUTPUT"
+          
+          # Kill the CLI process
+          kill $CLI_PID 2>/dev/null || true
           
           # Verify request ID header is present in logs
           if ! echo "$OUTPUT" | grep -q "X-Client-Request-Id"; then
