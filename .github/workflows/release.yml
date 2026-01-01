@@ -1,0 +1,192 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v0.2.0-alpha or v0.1.0)'
+        required: true
+        type: string
+      release_type:
+        description: 'Release type'
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+      prerelease:
+        description: 'Is this a pre-release?'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      
+      - name: Validate version format
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9]+)?$ ]]; then
+            echo "Error: Version must be in format v0.2.0-alpha or v0.1.0"
+            exit 1
+          fi
+          echo "Version format is valid: $VERSION"
+      
+      - name: Create release branch
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          BRANCH_NAME="release/$VERSION"
+          
+          # Create and push release branch
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH_NAME"
+          git push origin "$BRANCH_NAME"
+          
+          echo "Created release branch: $BRANCH_NAME"
+      
+      - name: Build gateway binary for Linux
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          mkdir -p dist
+          
+          # Build for Linux amd64
+          echo "Building gateway for linux/amd64..."
+          GOOS=linux GOARCH=amd64 go build -o dist/gateway-linux-amd64 \
+            -ldflags "-X main.version=$VERSION" \
+            ./gateway
+          
+          # Build for Linux arm64
+          echo "Building gateway for linux/arm64..."
+          GOOS=linux GOARCH=arm64 go build -o dist/gateway-linux-arm64 \
+            -ldflags "-X main.version=$VERSION" \
+            ./gateway
+          
+          echo "Gateway binaries built successfully"
+      
+      - name: Build CLI client for multiple platforms
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          mkdir -p dist
+          
+          # Build for Linux amd64
+          echo "Building CLI for linux/amd64..."
+          GOOS=linux GOARCH=amd64 go build -o dist/azhexgate-linux-amd64 \
+            -ldflags "-X main.version=$VERSION" \
+            ./client
+          
+          # Build for Linux arm64
+          echo "Building CLI for linux/arm64..."
+          GOOS=linux GOARCH=arm64 go build -o dist/azhexgate-linux-arm64 \
+            -ldflags "-X main.version=$VERSION" \
+            ./client
+          
+          # Build for Darwin amd64
+          echo "Building CLI for darwin/amd64..."
+          GOOS=darwin GOARCH=amd64 go build -o dist/azhexgate-darwin-amd64 \
+            -ldflags "-X main.version=$VERSION" \
+            ./client
+          
+          # Build for Darwin arm64
+          echo "Building CLI for darwin/arm64..."
+          GOOS=darwin GOARCH=arm64 go build -o dist/azhexgate-darwin-arm64 \
+            -ldflags "-X main.version=$VERSION" \
+            ./client
+          
+          # Build for Windows amd64
+          echo "Building CLI for windows/amd64..."
+          GOOS=windows GOARCH=amd64 go build -o dist/azhexgate-windows-amd64.exe \
+            -ldflags "-X main.version=$VERSION" \
+            ./client
+          
+          # Build for Windows arm64
+          echo "Building CLI for windows/arm64..."
+          GOOS=windows GOARCH=arm64 go build -o dist/azhexgate-windows-arm64.exe \
+            -ldflags "-X main.version=$VERSION" \
+            ./client
+          
+          echo "CLI binaries built successfully"
+      
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+          echo "Checksums generated"
+      
+      - name: Create Git tag
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create annotated tag
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+          
+          echo "Created and pushed tag: $VERSION"
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ github.event.inputs.prerelease }}
+          draft: false
+          files: |
+            dist/gateway-linux-amd64
+            dist/gateway-linux-arm64
+            dist/azhexgate-linux-amd64
+            dist/azhexgate-linux-arm64
+            dist/azhexgate-darwin-amd64
+            dist/azhexgate-darwin-arm64
+            dist/azhexgate-windows-amd64.exe
+            dist/azhexgate-windows-arm64.exe
+            dist/checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Release Summary
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          RELEASE_TYPE="${{ github.event.inputs.release_type }}"
+          PRERELEASE="${{ github.event.inputs.prerelease }}"
+          
+          echo "## Release Summary"
+          echo "- Version: $VERSION"
+          echo "- Release Type: $RELEASE_TYPE"
+          echo "- Pre-release: $PRERELEASE"
+          echo "- Release Branch: release/$VERSION"
+          echo "- Tag: $VERSION"
+          echo ""
+          echo "## Built Artifacts"
+          echo "Gateway binaries:"
+          echo "  - gateway-linux-amd64"
+          echo "  - gateway-linux-arm64"
+          echo ""
+          echo "CLI binaries:"
+          echo "  - azhexgate-linux-amd64"
+          echo "  - azhexgate-linux-arm64"
+          echo "  - azhexgate-darwin-amd64"
+          echo "  - azhexgate-darwin-arm64"
+          echo "  - azhexgate-windows-amd64.exe"
+          echo "  - azhexgate-windows-arm64.exe"
+          echo ""
+          echo "All artifacts uploaded to GitHub Release: https://github.com/${{ github.repository }}/releases/tag/$VERSION"
