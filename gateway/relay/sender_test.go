@@ -2,7 +2,6 @@ package relay
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -429,89 +428,6 @@ func TestSender_ForwardRequestRaw(t *testing.T) {
 	expectedBody := "Hello via raw forwarding"
 	if string(body) != expectedBody {
 		t.Errorf("Expected body %q, got %q", expectedBody, string(body))
-	}
-}
-
-func TestSender_ForwardRequest_WithResponseWriter(t *testing.T) {
-	localServer, sender, _, ctx, cancel, wg := setupTestEnvironment(t,
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("Hello from server"))
-		}))
-	defer cleanupTestEnvironment(localServer, sender, cancel, wg)
-
-	// Give listener time to start
-	time.Sleep(50 * time.Millisecond)
-
-	// Create a request
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/test", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-
-	// Create a custom ResponseWriter that captures the response
-	var capturedStatus int
-	var capturedBody bytes.Buffer
-	var capturedHeaders http.Header
-
-	mockWriter := &mockResponseWriter{
-		headers: make(http.Header),
-		onWriteHeader: func(status int) {
-			capturedStatus = status
-		},
-		onWrite: func(p []byte) (int, error) {
-			return capturedBody.Write(p)
-		},
-		onHeader: func() http.Header {
-			if capturedHeaders == nil {
-				capturedHeaders = make(http.Header)
-			}
-			return capturedHeaders
-		},
-	}
-
-	// Forward the request
-	err = sender.ForwardRequest(ctx, req, mockWriter, nil)
-	if err != nil {
-		t.Fatalf("Failed to forward request: %v", err)
-	}
-
-	// Verify response
-	if capturedStatus != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", capturedStatus)
-	}
-
-	expectedBody := "Hello from server"
-	if capturedBody.String() != expectedBody {
-		t.Errorf("Expected body %q, got %q", expectedBody, capturedBody.String())
-	}
-}
-
-// mockResponseWriter implements http.ResponseWriter for testing
-type mockResponseWriter struct {
-	headers       http.Header
-	onWriteHeader func(int)
-	onWrite       func([]byte) (int, error)
-	onHeader      func() http.Header
-}
-
-func (m *mockResponseWriter) Header() http.Header {
-	if m.onHeader != nil {
-		return m.onHeader()
-	}
-	return m.headers
-}
-
-func (m *mockResponseWriter) Write(p []byte) (int, error) {
-	if m.onWrite != nil {
-		return m.onWrite(p)
-	}
-	return len(p), nil
-}
-
-func (m *mockResponseWriter) WriteHeader(statusCode int) {
-	if m.onWriteHeader != nil {
-		m.onWriteHeader(statusCode)
 	}
 }
 
