@@ -15,6 +15,8 @@ import (
 	"github.com/julienstroheker/AzHexGate/internal/relay"
 )
 
+const testHTTPRequest = "GET /test HTTP/1.1\r\nHost: example.com\r\n\r\n"
+
 // setupTestEnvironment creates a test environment with local server, relay, and listener
 func setupTestEnvironment(t *testing.T, handler http.HandlerFunc) (
 	localServer *httptest.Server,
@@ -77,8 +79,7 @@ func TestListener_HandleHTTPRequest(t *testing.T) {
 	defer func() { _ = conn.Close() }()
 
 	// Write HTTP request to the connection
-	request := "GET /test HTTP/1.1\r\nHost: example.com\r\n\r\n"
-	_, err = conn.Write([]byte(request))
+	_, err = conn.Write([]byte(testHTTPRequest))
 	if err != nil {
 		t.Fatalf("Failed to write request: %v", err)
 	}
@@ -257,10 +258,8 @@ func TestListener_LocalServerUnreachable(t *testing.T) {
 	// the listener will fail to dial and close the relay connection.
 	// We should see the connection close when we try to read.
 
-	request := "GET /test HTTP/1.1\r\nHost: example.com\r\n\r\n"
-
 	// Try to write - may succeed if connection hasn't closed yet, or may fail
-	_, writeErr := conn.Write([]byte(request))
+	_, writeErr := conn.Write([]byte(testHTTPRequest))
 
 	// Try to read - should fail with EOF or connection closed
 	buf := make([]byte, 1024)
@@ -297,8 +296,7 @@ func TestListener_MultipleRequests(t *testing.T) {
 			t.Fatalf("Failed to dial for request %d: %v", i, err)
 		}
 
-		request := "GET /test HTTP/1.1\r\nHost: example.com\r\n\r\n"
-		_, err = conn.Write([]byte(request))
+		_, err = conn.Write([]byte(testHTTPRequest))
 		if err != nil {
 			_ = conn.Close()
 			t.Fatalf("Failed to write request %d: %v", i, err)
