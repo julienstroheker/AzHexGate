@@ -47,6 +47,9 @@ jobs:
           fi
           echo "Version format is valid: $VERSION"
       
+      - name: Create build directory
+        run: mkdir -p dist
+      
       - name: Create release branch
         run: |
           VERSION="${{ github.event.inputs.version }}"
@@ -62,8 +65,6 @@ jobs:
       
       - name: Build gateway binary for Linux
         run: |
-          mkdir -p dist
-          
           # Build for Linux amd64
           echo "Building gateway for linux/amd64..."
           GOOS=linux GOARCH=amd64 go build -o dist/gateway-linux-amd64 ./gateway
@@ -76,8 +77,6 @@ jobs:
       
       - name: Build CLI client for multiple platforms
         run: |
-          mkdir -p dist
-          
           # Build for Linux amd64
           echo "Building CLI for linux/amd64..."
           GOOS=linux GOARCH=amd64 go build -o dist/azhexgate-linux-amd64 ./client
