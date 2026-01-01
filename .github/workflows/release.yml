@@ -125,9 +125,9 @@ jobs:
           
           # Check if tag already exists locally or remotely
           if git rev-parse "$VERSION" > /dev/null 2>&1 || git ls-remote --exit-code --tags origin "$VERSION" > /dev/null 2>&1; then
-            echo "Warning: Tag $VERSION already exists. Skipping tag creation."
-            echo "If you need to re-create the tag, please delete it first."
-            exit 0
+            echo "Error: Tag $VERSION already exists."
+            echo "Please delete the existing tag first or use a different version number."
+            exit 1
           fi
           
           # Create annotated tag
