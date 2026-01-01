@@ -57,7 +57,7 @@ var startCmd = &cobra.Command{
 		cmd.Println(fmt.Sprintf("Public URL: %s", tunnelResp.PublicURL))
 		cmd.Println(fmt.Sprintf("Forwarding to: http://localhost:%d", portFlag))
 
-		log.Info("Tunnel created successfully",
+		log.Info("Tunnel created, preparing to start listener",
 			logging.String("public_url", tunnelResp.PublicURL),
 			logging.String("session_id", tunnelResp.SessionID))
 
