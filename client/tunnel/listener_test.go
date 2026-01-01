@@ -15,37 +15,59 @@ import (
 	"github.com/julienstroheker/AzHexGate/internal/relay"
 )
 
-func TestListener_HandleHTTPRequest(t *testing.T) {
-	// Create a local HTTP server
-	localServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("Hello from local server"))
-	}))
-	defer localServer.Close()
+// setupTestEnvironment creates a test environment with local server, relay, and listener
+func setupTestEnvironment(t *testing.T, handler http.HandlerFunc) (
+	localServer *httptest.Server,
+	listener *Listener,
+	memorySender *relay.MemorySender,
+	ctx context.Context,
+	cancel context.CancelFunc,
+	wg *sync.WaitGroup,
+) {
+	t.Helper()
+
+	// Create local HTTP server
+	localServer = httptest.NewServer(handler)
 
 	// Create in-memory relay
 	memoryListener := relay.NewMemoryListener()
-	defer func() { _ = memoryListener.Close() }()
-	memorySender := relay.NewMemorySender(memoryListener)
-	defer func() { _ = memorySender.Close() }()
+	memorySender = relay.NewMemorySender(memoryListener)
 
-	// Create tunnel listener pointing to local server
-	listener := NewListener(&Options{
+	// Create tunnel listener
+	listener = NewListener(&Options{
 		Relay:     memoryListener,
 		LocalAddr: strings.TrimPrefix(localServer.URL, "http://"),
 	})
-	defer func() { _ = listener.Close() }()
 
 	// Start listener in background
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var wg sync.WaitGroup
+	ctx, cancel = context.WithCancel(context.Background())
+	wg = &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		_ = listener.Start(ctx)
 	}()
+
+	return
+}
+
+// cleanupTestEnvironment cleans up test resources
+func cleanupTestEnvironment(localServer *httptest.Server, listener *Listener,
+	memorySender *relay.MemorySender, cancel context.CancelFunc, wg *sync.WaitGroup) {
+	cancel()
+	wg.Wait()
+	_ = listener.Close()
+	_ = memorySender.Close()
+	localServer.Close()
+}
+
+func TestListener_HandleHTTPRequest(t *testing.T) {
+	localServer, listener, memorySender, ctx, cancel, wg := setupTestEnvironment(t,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("Hello from local server"))
+		}))
+	defer cleanupTestEnvironment(localServer, listener, memorySender, cancel, wg)
 
 	// Simulate sending an HTTP request through the relay
 	conn, err := memorySender.Dial(ctx)
@@ -55,27 +77,23 @@ func TestListener_HandleHTTPRequest(t *testing.T) {
 	defer func() { _ = conn.Close() }()
 
 	// Write HTTP request to the connection
-	request := "GET /test HTTP/1.1\r\n" +
-		"Host: example.com\r\n" +
-		"\r\n"
+	request := "GET /test HTTP/1.1\r\nHost: example.com\r\n\r\n"
 	_, err = conn.Write([]byte(request))
 	if err != nil {
 		t.Fatalf("Failed to write request: %v", err)
 	}
 
-	// Read HTTP response from the connection
+	// Read and verify HTTP response
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	if err != nil {
 		t.Fatalf("Failed to read response: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	// Verify status code
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", resp.StatusCode)
 	}
 
-	// Verify response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("Failed to read body: %v", err)
@@ -85,48 +103,20 @@ func TestListener_HandleHTTPRequest(t *testing.T) {
 	if string(body) != expectedBody {
 		t.Errorf("Expected body %q, got %q", expectedBody, string(body))
 	}
-
-	// Cancel context and wait for listener to stop
-	cancel()
-	wg.Wait()
 }
 
 func TestListener_HandlePOSTRequest(t *testing.T) {
-	// Create a local HTTP server that echoes POST body
-	localServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		body, _ := io.ReadAll(r.Body)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(body)
-	}))
-	defer localServer.Close()
-
-	// Create in-memory relay
-	memoryListener := relay.NewMemoryListener()
-	defer func() { _ = memoryListener.Close() }()
-	memorySender := relay.NewMemorySender(memoryListener)
-	defer func() { _ = memorySender.Close() }()
-
-	// Create tunnel listener
-	listener := NewListener(&Options{
-		Relay:     memoryListener,
-		LocalAddr: strings.TrimPrefix(localServer.URL, "http://"),
-	})
-	defer func() { _ = listener.Close() }()
-
-	// Start listener in background
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		_ = listener.Start(ctx)
-	}()
+	localServer, listener, memorySender, ctx, cancel, wg := setupTestEnvironment(t,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			body, _ := io.ReadAll(r.Body)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+	defer cleanupTestEnvironment(localServer, listener, memorySender, cancel, wg)
 
 	// Simulate sending a POST request
 	conn, err := memorySender.Dial(ctx)
@@ -147,14 +137,13 @@ func TestListener_HandlePOSTRequest(t *testing.T) {
 		t.Fatalf("Failed to write request: %v", err)
 	}
 
-	// Read response
+	// Read and verify response
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	if err != nil {
 		t.Fatalf("Failed to read response: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	// Verify response
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", resp.StatusCode)
 	}
@@ -166,9 +155,6 @@ func TestListener_HandlePOSTRequest(t *testing.T) {
 	if string(body) != postBody {
 		t.Errorf("Expected body %q, got %q", postBody, string(body))
 	}
-
-	cancel()
-	wg.Wait()
 }
 
 func TestListener_LocalServerError(t *testing.T) {
@@ -290,42 +276,18 @@ func TestListener_LocalServerUnreachable(t *testing.T) {
 }
 
 func TestListener_MultipleRequests(t *testing.T) {
-	// Create a local HTTP server
 	requestCount := 0
 	var mu sync.Mutex
-	localServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		requestCount++
-		count := requestCount
-		mu.Unlock()
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(fmt.Sprintf("Request #%d", count)))
-	}))
-	defer localServer.Close()
-
-	// Create in-memory relay
-	memoryListener := relay.NewMemoryListener()
-	defer func() { _ = memoryListener.Close() }()
-	memorySender := relay.NewMemorySender(memoryListener)
-	defer func() { _ = memorySender.Close() }()
-
-	// Create tunnel listener
-	listener := NewListener(&Options{
-		Relay:     memoryListener,
-		LocalAddr: strings.TrimPrefix(localServer.URL, "http://"),
-	})
-	defer func() { _ = listener.Close() }()
-
-	// Start listener
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		_ = listener.Start(ctx)
-	}()
+	localServer, listener, memorySender, ctx, cancel, wg := setupTestEnvironment(t,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			requestCount++
+			count := requestCount
+			mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, "Request #%d", count)
+		}))
+	defer cleanupTestEnvironment(localServer, listener, memorySender, cancel, wg)
 
 	// Send multiple requests
 	numRequests := 5
@@ -367,9 +329,6 @@ func TestListener_MultipleRequests(t *testing.T) {
 	if finalCount != numRequests {
 		t.Errorf("Expected %d requests to be handled, got %d", numRequests, finalCount)
 	}
-
-	cancel()
-	wg.Wait()
 }
 
 func TestListener_ContextCancellation(t *testing.T) {

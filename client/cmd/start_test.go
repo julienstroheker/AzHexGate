@@ -38,14 +38,11 @@ func runStartCommandWithTimeout(t *testing.T, args []string, timeout time.Durati
 	// Give command time to execute and print output
 	time.Sleep(100 * time.Millisecond)
 
-	// Get early output
-	output := buf.String()
-
 	// Wait for goroutine to finish
 	wg.Wait()
 
 	// Get final output
-	output = buf.String()
+	output := buf.String()
 
 	// Reset for next test
 	rootCmd.SetArgs(nil)
@@ -131,7 +128,8 @@ func TestStartCommandWithCustomPort(t *testing.T) {
 	defer mockServer.Close()
 
 	// Test start command with custom port
-	output, _ := runStartCommandWithTimeout(t, []string{"start", "--port", "8080", "--api-url", mockServer.URL}, 500*time.Millisecond)
+	args := []string{"start", "--port", "8080", "--api-url", mockServer.URL}
+	output, _ := runStartCommandWithTimeout(t, args, 500*time.Millisecond)
 
 	if !strings.Contains(output, "http://localhost:8080") {
 		t.Errorf("Expected output to contain custom port 8080, got: %s", output)
