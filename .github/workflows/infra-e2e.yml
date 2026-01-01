@@ -11,6 +11,7 @@ jobs:
   deploy-and-test:
     name: Deploy and Test Infrastructure
     runs-on: ubuntu-latest
+    environment: ci
     
     steps:
       - name: Check out code
