@@ -257,6 +257,9 @@ func TestListener_LocalServerUnreachable(t *testing.T) {
 		_ = listener.Start(ctx)
 	}()
 
+	// Give listener time to start
+	time.Sleep(50 * time.Millisecond)
+
 	// Send request
 	conn, err := memorySender.Dial(ctx)
 	if err != nil {
@@ -264,22 +267,22 @@ func TestListener_LocalServerUnreachable(t *testing.T) {
 	}
 	defer func() { _ = conn.Close() }()
 
+	// With raw TCP forwarding, when local server is unreachable,
+	// the listener will fail to dial and close the relay connection.
+	// We should see the connection close when we try to read.
+
 	request := "GET /test HTTP/1.1\r\nHost: example.com\r\n\r\n"
-	_, err = conn.Write([]byte(request))
-	if err != nil {
-		t.Fatalf("Failed to write request: %v", err)
-	}
 
-	// Read response - should get Bad Gateway
-	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
-	if err != nil {
-		t.Fatalf("Failed to read response: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+	// Try to write - may succeed if connection hasn't closed yet, or may fail
+	_, writeErr := conn.Write([]byte(request))
 
-	// Should return 502 Bad Gateway
-	if resp.StatusCode != http.StatusBadGateway {
-		t.Errorf("Expected status 502, got %d", resp.StatusCode)
+	// Try to read - should fail with EOF or connection closed
+	buf := make([]byte, 1024)
+	_, readErr := conn.Read(buf)
+
+	// Either write or read should fail when local server is unreachable
+	if writeErr == nil && readErr == nil {
+		t.Error("Expected connection to fail when local server is unreachable")
 	}
 
 	cancel()

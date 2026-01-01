@@ -1,12 +1,9 @@
 package tunnel
 
 import (
-	"bufio"
 	"context"
-	"fmt"
 	"io"
-	"net/http"
-	"strings"
+	"net"
 
 	"github.com/julienstroheker/AzHexGate/internal/logging"
 	"github.com/julienstroheker/AzHexGate/internal/relay"
@@ -14,10 +11,9 @@ import (
 
 // Listener handles incoming connections from the relay and forwards them to localhost
 type Listener struct {
-	relay      relay.Listener
-	localAddr  string
-	httpClient *http.Client
-	logger     *logging.Logger
+	relay     relay.Listener
+	localAddr string
+	logger    *logging.Logger
 }
 
 // Options contains configuration for the Listener
@@ -27,9 +23,6 @@ type Options struct {
 
 	// LocalAddr is the address of the local HTTP server (e.g., "localhost:3000")
 	LocalAddr string
-
-	// HTTPClient is used to make requests to the local server (optional)
-	HTTPClient *http.Client
 
 	// Logger is used for debug logging (optional)
 	Logger *logging.Logger
@@ -41,16 +34,10 @@ func NewListener(opts *Options) *Listener {
 		opts = &Options{}
 	}
 
-	httpClient := opts.HTTPClient
-	if httpClient == nil {
-		httpClient = &http.Client{}
-	}
-
 	return &Listener{
-		relay:      opts.Relay,
-		localAddr:  opts.LocalAddr,
-		httpClient: httpClient,
-		logger:     opts.Logger,
+		relay:     opts.Relay,
+		localAddr: opts.LocalAddr,
+		logger:    opts.Logger,
 	}
 }
 
@@ -71,7 +58,7 @@ func (l *Listener) Start(ctx context.Context) error {
 		}
 
 		// Accept incoming connection from relay
-		conn, err := l.relay.Accept(ctx)
+		relayConn, err := l.relay.Accept(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
 				// Context cancelled, stop gracefully
@@ -84,83 +71,70 @@ func (l *Listener) Start(ctx context.Context) error {
 		}
 
 		// Handle connection in a separate goroutine
-		go l.handleConnection(ctx, conn)
+		go l.handleConnection(ctx, relayConn)
 	}
 }
 
-// handleConnection processes a single relay connection
-func (l *Listener) handleConnection(ctx context.Context, conn relay.Connection) {
+// handleConnection processes a single relay connection by establishing a TCP connection
+// to the local server and bidirectionally copying data between them
+func (l *Listener) handleConnection(ctx context.Context, relayConn relay.Connection) {
 	defer func() {
-		_ = conn.Close()
+		_ = relayConn.Close()
 	}()
 
 	if l.logger != nil {
 		l.logger.Debug("Handling new connection")
 	}
 
-	// Parse HTTP request from the connection
-	req, err := http.ReadRequest(bufio.NewReader(conn))
+	// Dial the local TCP server
+	var dialer net.Dialer
+	localConn, err := dialer.DialContext(ctx, "tcp", l.localAddr)
 	if err != nil {
 		if l.logger != nil {
-			l.logger.Error("Failed to parse HTTP request", logging.Error(err))
+			l.logger.Error("Failed to dial local server", logging.Error(err))
 		}
-		return
-	}
-
-	// Update request URL to point to local server
-	req.URL.Scheme = "http"
-	req.URL.Host = l.localAddr
-	req.RequestURI = "" // Must be cleared for client requests
-
-	// Forward request to local server
-	if l.logger != nil {
-		l.logger.Debug("Forwarding request to local server",
-			logging.String("method", req.Method),
-			logging.String("path", req.URL.Path))
-	}
-
-	resp, err := l.httpClient.Do(req.WithContext(ctx))
-	if err != nil {
-		if l.logger != nil {
-			l.logger.Error("Failed to forward request to local server", logging.Error(err))
-		}
-		// Write error response back to relay
-		_ = l.writeErrorResponse(conn, http.StatusBadGateway, "Failed to reach local server")
 		return
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		_ = localConn.Close()
 	}()
 
-	// Write response back to relay connection
-	if err := resp.Write(conn); err != nil {
-		if l.logger != nil {
-			l.logger.Error("Failed to write response to relay", logging.Error(err))
-		}
-		return
+	if l.logger != nil {
+		l.logger.Debug("Connected to local server")
 	}
+
+	// Bidirectional copy between relay and local server
+	done := make(chan error, 2)
+
+	// Copy from relay to local server
+	go func() {
+		_, err := io.Copy(localConn, relayConn)
+		done <- err
+	}()
+
+	// Copy from local server to relay
+	go func() {
+		_, err := io.Copy(relayConn, localConn)
+		done <- err
+	}()
+
+	// Wait for one direction to complete
+	err = <-done
 
 	if l.logger != nil {
-		l.logger.Debug("Request completed",
-			logging.Int("status", resp.StatusCode))
+		if err != nil && err != io.EOF {
+			l.logger.Debug("Connection closed with error", logging.Error(err))
+		} else {
+			l.logger.Debug("Connection completed successfully")
+		}
 	}
-}
 
-// writeErrorResponse writes an HTTP error response to the connection
-func (l *Listener) writeErrorResponse(w io.Writer, statusCode int, message string) error {
-	resp := &http.Response{
-		StatusCode:    statusCode,
-		Status:        fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
-		Proto:         "HTTP/1.1",
-		ProtoMajor:    1,
-		ProtoMinor:    1,
-		Header:        make(http.Header),
-		Body:          io.NopCloser(strings.NewReader(message)),
-		ContentLength: int64(len(message)),
-	}
-	resp.Header.Set("Content-Type", "text/plain")
+	// Close both connections to terminate the other goroutine
+	_ = relayConn.Close()
+	_ = localConn.Close()
 
-	return resp.Write(w)
+	// Wait for the other goroutine to finish
+	<-done
 }
 
 // Close closes the listener
