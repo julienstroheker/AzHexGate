@@ -55,13 +55,19 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
           BRANCH_NAME="release/$VERSION"
           
-          # Create and push release branch
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH_NAME"
-          git push origin "$BRANCH_NAME"
-          
-          echo "Created release branch: $BRANCH_NAME"
+          # Check if branch already exists
+          if git ls-remote --exit-code --heads origin "$BRANCH_NAME" > /dev/null 2>&1; then
+            echo "Release branch $BRANCH_NAME already exists"
+            git fetch origin "$BRANCH_NAME"
+            git checkout "$BRANCH_NAME"
+          else
+            # Create and push release branch
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git checkout -b "$BRANCH_NAME"
+            git push origin "$BRANCH_NAME"
+            echo "Created release branch: $BRANCH_NAME"
+          fi
       
       - name: Build gateway binary for Linux
         run: |
@@ -116,6 +122,13 @@ jobs:
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if tag already exists locally or remotely
+          if git rev-parse "$VERSION" > /dev/null 2>&1 || git ls-remote --exit-code --tags origin "$VERSION" > /dev/null 2>&1; then
+            echo "Warning: Tag $VERSION already exists. Skipping tag creation."
+            echo "If you need to re-create the tag, please delete it first."
+            exit 0
+          fi
           
           # Create annotated tag
           git tag -a "$VERSION" -m "Release $VERSION"
