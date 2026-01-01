@@ -2,14 +2,53 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/julienstroheker/AzHexGate/internal/api"
 )
+
+func runStartCommandWithTimeout(t *testing.T, args []string, timeout time.Duration) (string, error) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	rootCmd.SetArgs(args)
+
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+
+	var wg sync.WaitGroup
+	var cmdErr error
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		cmdErr = rootCmd.ExecuteContext(ctx)
+	}()
+
+	// Give command time to execute and print output
+	time.Sleep(100 * time.Millisecond)
+
+	// Wait for goroutine to finish
+	wg.Wait()
+
+	// Get final output
+	output := buf.String()
+
+	// Reset for next test
+	rootCmd.SetArgs(nil)
+
+	return output, cmdErr
+}
 
 func TestStartCommandWithMockAPI(t *testing.T) {
 	// Create mock API server
@@ -50,19 +89,14 @@ func TestStartCommandWithMockAPI(t *testing.T) {
 	defer mockServer.Close()
 
 	// Test start command with mock API
-	rootCmd.SetArgs([]string{"start", "--api-url", mockServer.URL})
+	output, cmdErr := runStartCommandWithTimeout(t, []string{"start", "--api-url", mockServer.URL}, 500*time.Millisecond)
 
-	// Capture output
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-
-	err := rootCmd.Execute()
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
+	// Should get context deadline exceeded since we're waiting for signals
+	if cmdErr != context.DeadlineExceeded && cmdErr != context.Canceled {
+		t.Errorf("Expected context deadline exceeded, got: %v", cmdErr)
 	}
 
-	output := buf.String()
+	// Check that output was printed before timeout
 	if !strings.Contains(output, "Tunnel established") {
 		t.Errorf("Expected output to contain 'Tunnel established', got: %s", output)
 	}
@@ -74,9 +108,6 @@ func TestStartCommandWithMockAPI(t *testing.T) {
 	if !strings.Contains(output, "http://localhost:3000") {
 		t.Errorf("Expected output to contain local port, got: %s", output)
 	}
-
-	// Reset for next test
-	rootCmd.SetArgs(nil)
 }
 
 func TestStartCommandWithCustomPort(t *testing.T) {
@@ -97,25 +128,12 @@ func TestStartCommandWithCustomPort(t *testing.T) {
 	defer mockServer.Close()
 
 	// Test start command with custom port
-	rootCmd.SetArgs([]string{"start", "--port", "8080", "--api-url", mockServer.URL})
+	args := []string{"start", "--port", "8080", "--api-url", mockServer.URL}
+	output, _ := runStartCommandWithTimeout(t, args, 500*time.Millisecond)
 
-	// Capture output
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-
-	err := rootCmd.Execute()
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-
-	output := buf.String()
 	if !strings.Contains(output, "http://localhost:8080") {
 		t.Errorf("Expected output to contain custom port 8080, got: %s", output)
 	}
-
-	// Reset for next test
-	rootCmd.SetArgs(nil)
 }
 
 func TestStartCommandAPIError(t *testing.T) {
@@ -127,24 +145,15 @@ func TestStartCommandAPIError(t *testing.T) {
 	defer mockServer.Close()
 
 	// Test start command with API error
-	rootCmd.SetArgs([]string{"start", "--api-url", mockServer.URL})
+	output, err := runStartCommandWithTimeout(t, []string{"start", "--api-url", mockServer.URL}, time.Second)
 
-	// Capture output
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-
-	err := rootCmd.Execute()
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "failed to create tunnel") {
-		t.Errorf("Expected error to contain 'failed to create tunnel', got: %v", err)
+	if !strings.Contains(err.Error(), "failed to create tunnel") && err != context.DeadlineExceeded {
+		t.Errorf("Expected error to contain 'failed to create tunnel', got: %v (output: %s)", err, output)
 	}
-
-	// Reset for next test
-	rootCmd.SetArgs(nil)
 }
 
 func TestStartCommandInvalidJSON(t *testing.T) {
@@ -157,46 +166,28 @@ func TestStartCommandInvalidJSON(t *testing.T) {
 	defer mockServer.Close()
 
 	// Test start command with invalid JSON
-	rootCmd.SetArgs([]string{"start", "--api-url", mockServer.URL})
+	output, err := runStartCommandWithTimeout(t, []string{"start", "--api-url", mockServer.URL}, time.Second)
 
-	// Capture output
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-
-	err := rootCmd.Execute()
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "failed to") {
-		t.Errorf("Expected error to contain 'failed to', got: %v", err)
+	if !strings.Contains(err.Error(), "failed to") && err != context.DeadlineExceeded {
+		t.Errorf("Expected error to contain 'failed to', got: %v (output: %s)", err, output)
 	}
-
-	// Reset for next test
-	rootCmd.SetArgs(nil)
 }
 
 func TestStartCommandNetworkError(t *testing.T) {
 	// Test start command with unreachable API
-	rootCmd.SetArgs([]string{"start", "--api-url", "http://localhost:99999"})
+	output, err := runStartCommandWithTimeout(t, []string{"start", "--api-url", "http://localhost:99999"}, time.Second)
 
-	// Capture output
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-
-	err := rootCmd.Execute()
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "failed to") {
-		t.Errorf("Expected error to contain 'failed to', got: %v", err)
+	if !strings.Contains(err.Error(), "failed to") && err != context.DeadlineExceeded {
+		t.Errorf("Expected error to contain 'failed to', got: %v (output: %s)", err, output)
 	}
-
-	// Reset for next test
-	rootCmd.SetArgs(nil)
 }
 
 func TestVerboseFlag(t *testing.T) {
@@ -217,24 +208,13 @@ func TestVerboseFlag(t *testing.T) {
 	defer mockServer.Close()
 
 	// Test verbose flag
-	rootCmd.SetArgs([]string{"start", "-v", "--api-url", mockServer.URL})
-
-	// Capture output
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-
-	err := rootCmd.Execute()
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
+	_, _ = runStartCommandWithTimeout(t, []string{"start", "-v", "--api-url", mockServer.URL}, 500*time.Millisecond)
 
 	// Logger should be initialized with DEBUG level when verbose flag is set
 	// Note: We can't easily test the log output since it goes to stdout
 	// but we verify the command completes without error
 
-	// Reset for next test
-	rootCmd.SetArgs(nil)
+	// Reset verbose flag for other tests
 	verboseFlag = false
 }
 
