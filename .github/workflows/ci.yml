@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'infra/**'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches:
       - main
+    paths:
+      - 'infra/**'
+      - '.github/workflows/ci.yml'
 
 jobs:
   bicep-validation:
@@ -49,20 +55,22 @@ jobs:
           
           echo "Main template validated successfully!"
       
-      - name: Check for generated ARM templates
+      - name: Verify no generated ARM templates are committed
         run: |
           echo "Checking that ARM templates are not committed..."
-          if [ -f infra/main.json ] || [ -f infra/modules/relay.json ] || [ -f infra/modules/appservice.json ]; then
+          if [ -n "$(git status --porcelain infra/**/*.json 2>/dev/null)" ]; then
             echo "ERROR: Generated ARM templates (.json) should not be committed to the repository"
-            echo "Please add *.json to .gitignore in the infra directory"
+            echo "Committed JSON files found:"
+            git status --porcelain infra/**/*.json
+            echo ""
+            echo "These files should be in .gitignore"
             exit 1
           fi
-          echo "No ARM templates found - validation passed!"
+          echo "No committed ARM templates found - validation passed!"
 
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
-    needs: bicep-validation
     permissions:
       contents: read
     
