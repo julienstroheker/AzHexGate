@@ -163,7 +163,11 @@ func (s *Sender) ForwardRequestRaw(ctx context.Context, clientConn net.Conn, log
 	// Wait for the other goroutine to finish
 	<-done
 
-	return nil
+	// Return the error unless it's EOF (which is normal termination)
+	if err == io.EOF {
+		return nil
+	}
+	return err
 }
 
 // Close closes the sender

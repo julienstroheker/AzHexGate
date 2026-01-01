@@ -546,4 +546,3 @@ func TestSender_NewSenderWithNilOptions(t *testing.T) {
 		t.Error("Expected non-nil sender")
 	}
 }
-
