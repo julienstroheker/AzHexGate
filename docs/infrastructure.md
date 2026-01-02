@@ -266,42 +266,29 @@ az deployment group what-if \
 
 ## Post-Deployment Configuration
 
-After infrastructure deployment, additional configuration is needed:
+After infrastructure deployment, the following is automatically configured:
 
-### 1. Configure RBAC for Managed Identity
+### Automated Configuration
 
-Grant the App Service Managed Identity permissions to access Relay:
+**RBAC for Managed Identity (Automated)**: The Bicep deployment automatically grants the App Service Managed Identity the "Azure Relay Owner" role on the Relay namespace. This allows the gateway application to:
+- Create and manage Hybrid Connections
+- Generate SAS tokens for listeners
+- Send messages through Relay
 
-```bash
-# Get the principal ID from deployment outputs
-PRINCIPAL_ID=$(az deployment group show \
-  --resource-group "azhexgate-rg-dev" \
-  --name "main" \
-  --query properties.outputs.appServicePrincipalId.value \
-  --output tsv)
+No manual role assignment is needed.
 
-# Get the Relay namespace resource ID
-RELAY_ID=$(az relay namespace show \
-  --resource-group "azhexgate-rg-dev" \
-  --name "azhexgate-relay-dev" \
-  --query id \
-  --output tsv)
+### Manual Configuration Steps
 
-# Assign Azure Relay Owner role
-az role assignment create \
-  --assignee "$PRINCIPAL_ID" \
-  --role "Azure Relay Owner" \
-  --scope "$RELAY_ID"
-```
+The following steps still need to be performed manually:
 
-### 2. Deploy Application Code
+### 1. Deploy Application Code
 
 Deploy the gateway application to App Service using:
 - Azure CLI: `az webapp deployment source config-zip`
 - GitHub Actions (recommended for CI/CD)
 - Azure DevOps Pipelines
 
-### 3. Configure Application Settings
+### 2. Configure Application Settings
 
 Set environment variables for the gateway application:
 

@@ -51,6 +51,15 @@ module appService 'modules/appservice.bicep' = {
   }
 }
 
+// Grant App Service Managed Identity access to Relay
+module relayRbac 'modules/relay-rbac.bicep' = {
+  name: 'relay-rbac-deployment'
+  params: {
+    relayNamespaceName: relay.outputs.relayNamespaceName
+    appServicePrincipalId: appService.outputs.appServicePrincipalId
+  }
+}
+
 // Outputs
 @description('Relay namespace name')
 output relayNamespaceName string = relay.outputs.relayNamespaceName
