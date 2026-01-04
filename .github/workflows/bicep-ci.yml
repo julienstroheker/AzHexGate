@@ -1,0 +1,69 @@
+name: Bicep CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/**'
+      - '.github/workflows/bicep-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'infra/**'
+      - '.github/workflows/bicep-ci.yml'
+
+jobs:
+  bicep-validation:
+    name: Validate Bicep Templates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      
+      - name: Setup Bicep CLI
+        run: |
+          # Install Azure CLI if not present
+          if ! command -v az &> /dev/null; then
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+          fi
+          
+          # Install/Upgrade Bicep CLI
+          az bicep install
+          
+          # Verify installation
+          az bicep version
+      
+      - name: Validate Bicep modules
+        run: |
+          echo "Validating relay.bicep..."
+          az bicep build --file infra/modules/relay.bicep
+          
+          echo "Validating appservice.bicep..."
+          az bicep build --file infra/modules/appservice.bicep
+          
+          echo "All modules validated successfully!"
+      
+      - name: Validate main Bicep template
+        run: |
+          echo "Validating main.bicep..."
+          az bicep build --file infra/main.bicep
+          
+          echo "Main template validated successfully!"
+      
+      - name: Verify no generated ARM templates are committed
+        run: |
+          echo "Checking that ARM templates are not committed..."
+          if [ -n "$(git status --porcelain infra/**/*.json 2>/dev/null)" ]; then
+            echo "ERROR: Generated ARM templates (.json) should not be committed to the repository"
+            echo "Committed JSON files found:"
+            git status --porcelain infra/**/*.json
+            echo ""
+            echo "These files should be in .gitignore"
+            exit 1
+          fi
+          echo "No committed ARM templates found - validation passed!"

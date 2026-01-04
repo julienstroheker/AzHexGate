@@ -1,0 +1,131 @@
+name: Infrastructure E2E Tests
+
+on:
+  workflow_dispatch:  # Manual trigger only, by repo admins
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-and-test:
+    name: Deploy and Test Infrastructure
+    runs-on: ubuntu-latest
+    environment: ci
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      
+      - name: Generate unique resource group name
+        id: rg-name
+        run: |
+          # Generate random 8-character suffix
+          RANDOM_SUFFIX=$(openssl rand -hex 4)
+          RG_NAME="azhexgate-ci-${RANDOM_SUFFIX}"
+          echo "rg_name=${RG_NAME}" >> $GITHUB_OUTPUT
+          echo "Resource Group: ${RG_NAME}"
+      
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Setup Bicep CLI
+        run: |
+          # Install/Upgrade Bicep CLI
+          az bicep install
+          az bicep version
+      
+      - name: Create resource group
+        run: |
+          az group create \
+            --name ${{ steps.rg-name.outputs.rg_name }} \
+            --location eastus \
+            --tags \
+              environment=ci \
+              purpose=e2e-testing \
+              managed-by=github-actions \
+              created-by=${{ github.actor }} \
+              run-id=${{ github.run_id }}
+      
+      - name: Deploy Bicep infrastructure
+        id: deployment
+        run: |
+          echo "Deploying infrastructure to ${{ steps.rg-name.outputs.rg_name }}..."
+          az deployment group create \
+            --resource-group ${{ steps.rg-name.outputs.rg_name }} \
+            --template-file infra/main.bicep \
+            --parameters environmentName=ci \
+            --parameters baseName=azhexgate-test-${{ github.run_id }} \
+            --verbose
+          
+          echo "Deployment completed successfully!"
+      
+      - name: Verify deployed resources
+        run: |
+          echo "Verifying deployed resources..."
+          
+          # List all resources in the resource group
+          echo "Resources in ${{ steps.rg-name.outputs.rg_name }}:"
+          az resource list \
+            --resource-group ${{ steps.rg-name.outputs.rg_name }} \
+            --output table
+          
+          # Verify Relay namespace exists
+          echo ""
+          echo "Checking Relay namespace..."
+          RELAY_COUNT=$(az relay namespace list \
+            --resource-group ${{ steps.rg-name.outputs.rg_name }} \
+            --query "length(@)" \
+            --output tsv)
+          
+          if [ "$RELAY_COUNT" -eq 0 ]; then
+            echo "ERROR: No Relay namespace found"
+            exit 1
+          fi
+          echo "✓ Relay namespace verified"
+          
+          # Verify App Service exists
+          echo ""
+          echo "Checking App Service..."
+          APP_COUNT=$(az webapp list \
+            --resource-group ${{ steps.rg-name.outputs.rg_name }} \
+            --query "length(@)" \
+            --output tsv)
+          
+          if [ "$APP_COUNT" -eq 0 ]; then
+            echo "ERROR: No App Service found"
+            exit 1
+          fi
+          echo "✓ App Service verified"
+          
+          # Verify App Service has Managed Identity
+          echo ""
+          echo "Checking Managed Identity..."
+          IDENTITY_TYPE=$(az webapp identity show \
+            --resource-group ${{ steps.rg-name.outputs.rg_name }} \
+            --name $(az webapp list --resource-group ${{ steps.rg-name.outputs.rg_name }} --query "[0].name" -o tsv) \
+            --query "type" \
+            --output tsv)
+          
+          if [ "$IDENTITY_TYPE" != "SystemAssigned" ]; then
+            echo "ERROR: App Service does not have System-Assigned Managed Identity"
+            exit 1
+          fi
+          echo "✓ Managed Identity verified"
+          
+          echo ""
+          echo "All resources verified successfully!"
+      
+      - name: Cleanup - Delete resource group
+        if: always()
+        run: |
+          echo "Cleaning up resources..."
+          az group delete \
+            --name ${{ steps.rg-name.outputs.rg_name }} \
+            --yes \
+            --no-wait
+          echo "Resource group deletion initiated: ${{ steps.rg-name.outputs.rg_name }}"
