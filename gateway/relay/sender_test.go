@@ -62,7 +62,7 @@ func startListenerLoop(ctx context.Context, memoryListener *relay.MemoryListener
 		}
 
 		// Accept incoming connection from relay
-		relayConn, err := memoryListener.Accept(ctx)
+		relayConn, err := memoryListener.Accept(ctx, nil)
 		if err != nil {
 			if ctx.Err() != nil {
 				return

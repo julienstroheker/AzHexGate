@@ -40,6 +40,8 @@ var startCmd = &cobra.Command{
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
+		log.Debug("Creating gateway client", logging.String("api_url", apiURLFlag))
+
 		// Create Gateway API client with only overrides
 		gatewayClient := gateway.NewClient(&gateway.Options{
 			BaseURL: apiURLFlag,
@@ -61,10 +63,30 @@ var startCmd = &cobra.Command{
 			logging.String("public_url", tunnelResp.PublicURL),
 			logging.String("session_id", tunnelResp.SessionID))
 
-		// TODO: In production, create Azure Relay listener using tunnelResp.RelayEndpoint,
-		// tunnelResp.HybridConnectionName, and tunnelResp.ListenerToken
-		// For now, create an in-memory relay listener for testing
-		relayListener := relay.NewMemoryListener()
+		// Create relay listener based on response
+		var relayListener relay.Listener
+
+		// Check if we got a real token (not mock data)
+		if tunnelResp.ListenerToken != "mock-listener-token" {
+			// Use real Azure Relay listener
+			log.Info("Initializing Azure Relay listener",
+				logging.String("relay_endpoint", tunnelResp.RelayEndpoint),
+				logging.String("hybrid_connection", tunnelResp.HybridConnectionName))
+
+			var err error
+			relayListener, err = relay.NewAzureListener(&relay.AzureListenerOptions{
+				RelayEndpoint:        tunnelResp.RelayEndpoint,
+				HybridConnectionName: tunnelResp.HybridConnectionName,
+				Token:                tunnelResp.ListenerToken,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create Azure Relay listener: %w", err)
+			}
+		} else {
+			// Use in-memory relay for testing/development
+			log.Info("Using in-memory relay (development mode)")
+			relayListener = relay.NewMemoryListener()
+		}
 		defer func() { _ = relayListener.Close() }()
 
 		// Create tunnel listener

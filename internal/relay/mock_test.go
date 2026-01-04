@@ -27,7 +27,7 @@ func TestMemoryConnection_ReadWrite(t *testing.T) {
 	defer func() { _ = senderConn.Close() }()
 
 	// Accept the connection on the listener side
-	listenerConn, err := listener.Accept(ctx)
+	listenerConn, err := listener.Accept(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to accept: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestMemoryConnection_BidirectionalReadWrite(t *testing.T) {
 	defer func() { _ = senderConn.Close() }()
 
 	// Accept the connection on the listener side
-	listenerConn, err := listener.Accept(ctx)
+	listenerConn, err := listener.Accept(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to accept: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestMemoryConnection_Close(t *testing.T) {
 		t.Fatalf("Failed to dial: %v", err)
 	}
 
-	listenerConn, err := listener.Accept(ctx)
+	listenerConn, err := listener.Accept(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to accept: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestMemoryListener_Accept(t *testing.T) {
 	}()
 
 	// Accept should receive the connection
-	conn, err := listener.Accept(ctx)
+	conn, err := listener.Accept(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to accept: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestMemoryListener_AcceptWithContext(t *testing.T) {
 	defer cancel()
 
 	// Accept should return context error
-	_, err := listener.Accept(ctx)
+	_, err := listener.Accept(ctx, nil)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Expected context.DeadlineExceeded, got %v", err)
 	}
@@ -211,7 +211,7 @@ func TestMemoryListener_AcceptAfterClose(t *testing.T) {
 
 	// Try to accept after close
 	ctx := context.Background()
-	_, err := listener.Accept(ctx)
+	_, err := listener.Accept(ctx, nil)
 	if !errors.Is(err, ErrListenerClosed) {
 		t.Errorf("Expected ErrListenerClosed, got %v", err)
 	}
@@ -321,7 +321,7 @@ func TestMemoryConnection_ConcurrentReadWrite(t *testing.T) {
 	}
 	defer func() { _ = senderConn.Close() }()
 
-	listenerConn, err := listener.Accept(ctx)
+	listenerConn, err := listener.Accept(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to accept: %v", err)
 	}
@@ -375,7 +375,7 @@ func TestMemoryConnection_LargeData(t *testing.T) {
 	}
 	defer func() { _ = senderConn.Close() }()
 
-	listenerConn, err := listener.Accept(ctx)
+	listenerConn, err := listener.Accept(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to accept: %v", err)
 	}
@@ -457,7 +457,7 @@ func TestMemoryConnection_MultipleConnections(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 
-			conn, err := listener.Accept(ctx)
+			conn, err := listener.Accept(ctx, nil)
 			if err != nil {
 				t.Logf("Accept error for connection %d: %v", id, err)
 				return

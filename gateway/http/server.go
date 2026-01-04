@@ -28,14 +28,16 @@ func NewServer(port int, logger *logging.Logger) *Server {
 	// Register management API endpoints
 	mux.HandleFunc("/api/tunnels", handlers.TunnelsHandler)
 
-	// Chain middlewares: Telemetry -> Logger -> Metrics -> handlers
-	// Telemetry is first to ensure all requests get tracking IDs
-	// Logger is second to log requests with telemetry IDs
-	// Metrics is third as a placeholder for future metrics collection
+	// Chain middlewares: Proxy -> Telemetry -> Logger -> Metrics -> handlers
+	// Proxy is first to intercept subdomain tunnel requests before other processing
+	// Telemetry is second to ensure all requests get tracking IDs
+	// Logger is third to log requests with telemetry IDs
+	// Metrics is fourth as a placeholder for future metrics collection
 	var handler http.Handler = mux
 	handler = middleware.Metrics(handler)
 	handler = middleware.Logger(logger)(handler)
 	handler = middleware.Telemetry(handler)
+	handler = handlers.ProxyMiddleware(handler)
 
 	return &Server{
 		server: &http.Server{

@@ -1,0 +1,137 @@
+package management
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/julienstroheker/AzHexGate/internal/api"
+	"github.com/julienstroheker/AzHexGate/internal/azure/relay"
+)
+
+// Service handles tunnel provisioning and token generation
+type Service struct {
+	relayNamespace string
+	relayKeyName   string
+	relayKey       string
+	baseDomain     string
+	relayManager   *relay.Manager
+}
+
+// Options contains configuration for the Management Service
+// TODO : Most of this can be fetched via IMDS when using MI
+type Options struct {
+	// RelayNamespace is the Azure Relay namespace name (e.g., "myrelay")
+	RelayNamespace string
+
+	// RelayKeyName is the name of the shared access key
+	RelayKeyName string
+
+	// RelayKey is the shared access key value (base64 encoded)
+	RelayKey string
+
+	// BaseDomain is the base domain for public URLs (e.g., "azhexgate.com")
+	BaseDomain string
+
+	// SubscriptionID is the Azure subscription ID (required for creating Hybrid Connections)
+	SubscriptionID string
+
+	// ResourceGroupName is the resource group containing the Relay namespace
+	ResourceGroupName string
+}
+
+// NewService creates a new Management Service
+func NewService(opts *Options) (*Service, error) {
+	if opts == nil {
+		return nil, fmt.Errorf("options cannot be nil")
+	}
+	if opts.RelayNamespace == "" {
+		return nil, fmt.Errorf("relay namespace is required")
+	}
+	if opts.RelayKeyName == "" {
+		return nil, fmt.Errorf("relay key name is required")
+	}
+	if opts.RelayKey == "" {
+		return nil, fmt.Errorf("relay key is required")
+	}
+	if opts.BaseDomain == "" {
+		opts.BaseDomain = "azhexgate.com"
+	}
+
+	// Create Relay Manager if subscription ID and resource group are provided
+	var relayManager *relay.Manager
+	if opts.SubscriptionID != "" && opts.ResourceGroupName != "" {
+		mgr, err := relay.NewManager(&relay.ManagerOptions{
+			SubscriptionID:    opts.SubscriptionID,
+			ResourceGroupName: opts.ResourceGroupName,
+			NamespaceName:     opts.RelayNamespace,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create relay manager: %w", err)
+		}
+		relayManager = mgr
+	}
+
+	return &Service{
+		relayNamespace: opts.RelayNamespace,
+		relayKeyName:   opts.RelayKeyName,
+		relayKey:       opts.RelayKey,
+		baseDomain:     opts.BaseDomain,
+		relayManager:   relayManager,
+	}, nil
+}
+
+// CreateTunnel provisions a new tunnel and generates credentials
+func (s *Service) CreateTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error) {
+	// Generate a unique subdomain ID
+	subdomainID := generateSubdomainID()
+
+	// Derive hybrid connection name
+	hybridConnectionName := fmt.Sprintf("hc-%s", subdomainID)
+
+	// Create the Hybrid Connection in Azure Relay if manager is available
+	if s.relayManager != nil {
+		err := s.relayManager.CreateHybridConnection(ctx, hybridConnectionName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create hybrid connection: %w", err)
+		}
+	}
+
+	// Generate SAS token using namespace-level key
+	// Since RequiresClientAuthorization is false, namespace-level keys work
+	listenerToken, err := relay.GenerateSASToken(
+		s.relayNamespace,
+		hybridConnectionName,
+		s.relayKeyName,
+		s.relayKey,
+		24*time.Hour,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate listener token: %w", err)
+	}
+
+	// Build public URL
+	publicURL := fmt.Sprintf("https://%s.%s", subdomainID, s.baseDomain)
+
+	// Build relay endpoint
+	relayEndpoint := fmt.Sprintf("%s.servicebus.windows.net", s.relayNamespace)
+
+	// Generate session ID
+	sessionID := uuid.New().String()
+
+	return &api.TunnelResponse{
+		PublicURL:            publicURL,
+		RelayEndpoint:        relayEndpoint,
+		HybridConnectionName: hybridConnectionName,
+		ListenerToken:        listenerToken,
+		SessionID:            sessionID,
+	}, nil
+}
+
+// generateSubdomainID generates a random 8-digit subdomain identifier
+func generateSubdomainID() string {
+	id := uuid.New().String()
+	// Take first 8 characters of the UUID (hex format)
+	return id[:8]
+}

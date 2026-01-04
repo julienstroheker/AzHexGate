@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"sync"
+
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 var (
@@ -74,7 +76,7 @@ func NewMemoryListener() *MemoryListener {
 }
 
 // Accept waits for and returns the next connection
-func (l *MemoryListener) Accept(ctx context.Context) (Connection, error) {
+func (l *MemoryListener) Accept(ctx context.Context, logger *logging.Logger) (Connection, error) {
 	l.mu.Lock()
 	if l.closed {
 		l.mu.Unlock()
