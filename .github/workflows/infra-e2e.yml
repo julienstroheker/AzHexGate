@@ -43,7 +43,7 @@ jobs:
         run: |
           az group create \
             --name ${{ steps.rg-name.outputs.rg_name }} \
-            --location eastus \
+            --location canadaeast \
             --tags \
               environment=ci \
               purpose=e2e-testing \
