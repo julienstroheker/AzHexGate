@@ -157,11 +157,14 @@ func (l *AzureListener) handleIncomingConnections() {
 				buffer: data,
 			}
 
-			// Add to accept queue
+			// Try to add to accept queue with a timeout
+			// If queue is full, close the connection to avoid silent drops
 			select {
 			case l.acceptQueue <- azureConn:
+				// Successfully queued
 			default:
-				// Queue full, drop connection
+				// Queue full - close the connection to signal backpressure
+				_ = azureConn.Close()
 			}
 		}
 	}

@@ -89,7 +89,7 @@ func (s *AzureSender) Dial(ctx context.Context) (Connection, error) {
 	headers := http.Header{}
 	// Azure AD tokens don't start with "SharedAccessSignature"
 	// If it's not a SAS token, assume it's Azure AD and use Authorization header
-	if len(s.token) > 0 && s.token[:20] != "SharedAccessSignature" {
+	if len(s.token) > 20 && s.token[:20] != "SharedAccessSignature" {
 		headers.Set("Authorization", "Bearer "+s.token)
 	}
 
