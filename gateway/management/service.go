@@ -1,6 +1,7 @@
 package management
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -15,9 +16,11 @@ type Service struct {
 	relayKeyName   string
 	relayKey       string
 	baseDomain     string
+	relayManager   *relay.Manager
 }
 
 // Options contains configuration for the Management Service
+// TODO : Most of this can be fetched via IMDS when using MI
 type Options struct {
 	// RelayNamespace is the Azure Relay namespace name (e.g., "myrelay")
 	RelayNamespace string
@@ -30,6 +33,12 @@ type Options struct {
 
 	// BaseDomain is the base domain for public URLs (e.g., "azhexgate.com")
 	BaseDomain string
+
+	// SubscriptionID is the Azure subscription ID (required for creating Hybrid Connections)
+	SubscriptionID string
+
+	// ResourceGroupName is the resource group containing the Relay namespace
+	ResourceGroupName string
 }
 
 // NewService creates a new Management Service
@@ -50,24 +59,48 @@ func NewService(opts *Options) (*Service, error) {
 		opts.BaseDomain = "azhexgate.com"
 	}
 
+	// Create Relay Manager if subscription ID and resource group are provided
+	var relayManager *relay.Manager
+	if opts.SubscriptionID != "" && opts.ResourceGroupName != "" {
+		mgr, err := relay.NewManager(&relay.ManagerOptions{
+			SubscriptionID:    opts.SubscriptionID,
+			ResourceGroupName: opts.ResourceGroupName,
+			NamespaceName:     opts.RelayNamespace,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create relay manager: %w", err)
+		}
+		relayManager = mgr
+	}
+
 	return &Service{
 		relayNamespace: opts.RelayNamespace,
 		relayKeyName:   opts.RelayKeyName,
 		relayKey:       opts.RelayKey,
 		baseDomain:     opts.BaseDomain,
+		relayManager:   relayManager,
 	}, nil
 }
 
 // CreateTunnel provisions a new tunnel and generates credentials
-func (s *Service) CreateTunnel(localPort int) (*api.TunnelResponse, error) {
+func (s *Service) CreateTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error) {
 	// Generate a unique subdomain ID
 	subdomainID := generateSubdomainID()
 
 	// Derive hybrid connection name
 	hybridConnectionName := fmt.Sprintf("hc-%s", subdomainID)
 
-	// Generate listener SAS token (valid for 24 hours)
-	listenerToken, err := relay.GenerateListenerSASToken(
+	// Create the Hybrid Connection in Azure Relay if manager is available
+	if s.relayManager != nil {
+		err := s.relayManager.CreateHybridConnection(ctx, hybridConnectionName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create hybrid connection: %w", err)
+		}
+	}
+
+	// Generate SAS token using namespace-level key
+	// Since RequiresClientAuthorization is false, namespace-level keys work
+	listenerToken, err := relay.GenerateSASToken(
 		s.relayNamespace,
 		hybridConnectionName,
 		s.relayKeyName,

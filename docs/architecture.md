@@ -149,6 +149,44 @@ Relay is not public; the gateway is the public HTTP server.
 - Can scale out using App Service scaling and optionally Azure Front Door if needed.
 - Must be implemented in a streaming‑friendly way, avoiding buffering entire request/response bodies unnecessarily.
 
+#### 3.2.1 Request Routing Logic
+
+The gateway uses a **middleware-based routing** approach to differentiate between tunnel traffic and management API traffic. This is necessary because Go's standard `http.ServeMux` routes by path only and ignores the `Host` header.
+
+**Routing Decision Flow:**
+
+```
+Incoming Request
+       ↓
+ProxyMiddleware inspects Host header
+       ↓
+┌──────────────────────────────────────┐
+│ Has subdomain?                       │
+│ (e.g., c12aaac4.azhexgate.com)      │
+└──────────────────────────────────────┘
+       ↓                    ↓
+      YES                   NO
+       ↓                    ↓
+  ProxyHandler         Next Handler (ServeMux)
+  (tunnel traffic)     (management API)
+       ↓                    ↓
+  Azure Relay          /api/tunnels, /healthz, etc.
+```
+
+**Key Routing Rules:**
+
+1. **Subdomain present → Always proxy**
+   - `c12aaac4.azhexgate.com/` → Tunnel proxy
+   - `c12aaac4.azhexgate.com/api/users` → Tunnel proxy (local app's API)
+   - `c12aaac4.azhexgate.com/healthz` → Tunnel proxy (local app's health check)
+
+2. **Base domain (no subdomain) → Management API**
+   - `azhexgate.com/api/tunnels` → Management API
+   - `azhexgate.com/healthz` → Gateway health check
+   - `azhexgate.com/` → Gateway root (could serve UI in future)
+
+This design ensures that local applications can have any URL structure (including `/api/*` paths) without conflicting with the gateway's management endpoints.
+
 ```mermaid
 sequenceDiagram
     autonumber

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
@@ -59,42 +58,21 @@ func (s *AzureSender) Dial(ctx context.Context) (Connection, error) {
 	s.mu.Unlock()
 
 	// Build the WebSocket URL for sender
-	// Format: wss://<endpoint>/$hc/<name>?sb-hc-action=connect&sb-hc-token=<token>
-	wsURL := fmt.Sprintf("wss://%s/$hc/%s", s.relayEndpoint, s.hybridConnectionName)
+	// Format: wss://<endpoint>/$hc/<name>?sb-hc-action=connect
+	wsURL := fmt.Sprintf("wss://%s/$hc/%s?sb-hc-action=connect",
+		s.relayEndpoint, s.hybridConnectionName)
 
-	u, err := url.Parse(wsURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse URL: %w", err)
-	}
-
-	// Add query parameters
-	q := u.Query()
-	q.Set("sb-hc-action", "connect")
-
-	// Check if token looks like a SAS token or Azure AD token
-	// SAS tokens start with "SharedAccessSignature"
-	// Azure AD tokens are just the token value
-	if len(s.token) > 0 {
-		q.Set("sb-hc-token", s.token)
-	}
-
-	u.RawQuery = q.Encode()
+	// Add token in ServiceBusAuthorization header (not query string)
+	header := http.Header{}
+	header.Add("ServiceBusAuthorization", s.token)
 
 	// Set up WebSocket dialer
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 30 * time.Second,
 	}
 
-	// For Azure AD tokens, set as Authorization header
-	headers := http.Header{}
-	// Azure AD tokens don't start with "SharedAccessSignature"
-	// If it's not a SAS token, assume it's Azure AD and use Authorization header
-	if len(s.token) > 20 && s.token[:20] != "SharedAccessSignature" {
-		headers.Set("Authorization", "Bearer "+s.token)
-	}
-
 	// Connect to Azure Relay
-	conn, resp, err := dialer.DialContext(ctx, u.String(), headers)
+	conn, resp, err := dialer.DialContext(ctx, wsURL, header)
 	if err != nil {
 		if resp != nil {
 			_ = resp.Body.Close()

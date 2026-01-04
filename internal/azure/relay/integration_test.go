@@ -16,8 +16,8 @@ func TestIntegration_SASTokenGeneration(t *testing.T) {
 	// This is a test key - base64 encoded "testkey"
 	key := "dGVzdGtleQ=="
 
-	// Generate listener token
-	listenerToken, err := GenerateListenerSASToken(
+	// Generate token with 24h expiry
+	listenerToken, err := GenerateSASToken(
 		relayNamespace,
 		hybridConnectionName,
 		keyName,
@@ -34,8 +34,8 @@ func TestIntegration_SASTokenGeneration(t *testing.T) {
 
 	t.Logf("Generated listener token: %s", listenerToken[:50]+"...")
 
-	// Generate sender token
-	senderToken, err := GenerateSenderSASToken(
+	// Generate token with 1h expiry
+	senderToken, err := GenerateSASToken(
 		relayNamespace,
 		hybridConnectionName,
 		keyName,
@@ -66,7 +66,7 @@ func TestIntegration_TokenExpiry(t *testing.T) {
 	key := "dGVzdGtleQ=="
 
 	// Generate token with short expiry
-	token1, err := GenerateListenerSASToken(
+	token1, err := GenerateSASToken(
 		relayNamespace,
 		hybridConnectionName,
 		keyName,
@@ -81,7 +81,7 @@ func TestIntegration_TokenExpiry(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Generate new token
-	token2, err := GenerateListenerSASToken(
+	token2, err := GenerateSASToken(
 		relayNamespace,
 		hybridConnectionName,
 		keyName,

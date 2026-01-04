@@ -8,38 +8,42 @@ import (
 
 func TestGenerateSASToken(t *testing.T) {
 	tests := []struct {
-		name    string
-		uri     string
-		keyName string
-		key     string
-		wantErr bool
+		name                 string
+		relayNamespace       string
+		hybridConnectionName string
+		keyName              string
+		key                  string
+		wantErr              bool
 	}{
 		{
-			name:    "valid token generation",
-			uri:     "https://myrelay.servicebus.windows.net/myhc",
-			keyName: "RootManageSharedAccessKey",
-			key:     "dGVzdGtleQ==", // base64 encoded "testkey"
-			wantErr: false,
+			name:                 "valid token generation",
+			relayNamespace:       "myrelay",
+			hybridConnectionName: "myhc",
+			keyName:              "RootManageSharedAccessKey",
+			key:                  "dGVzdGtleQ==", // base64 encoded "testkey"
+			wantErr:              false,
 		},
 		{
-			name:    "uri with trailing slash",
-			uri:     "https://myrelay.servicebus.windows.net/myhc/",
-			keyName: "RootManageSharedAccessKey",
-			key:     "dGVzdGtleQ==",
-			wantErr: false,
+			name:                 "any valid string key",
+			relayNamespace:       "myrelay",
+			hybridConnectionName: "myhc",
+			keyName:              "RootManageSharedAccessKey",
+			key:                  "any-string-key-works",
+			wantErr:              false,
 		},
 		{
-			name:    "invalid base64 key",
-			uri:     "https://myrelay.servicebus.windows.net/myhc",
-			keyName: "RootManageSharedAccessKey",
-			key:     "not-valid-base64!@#",
-			wantErr: true,
+			name:                 "key with whitespace",
+			relayNamespace:       "myrelay",
+			hybridConnectionName: "myhc",
+			keyName:              "RootManageSharedAccessKey",
+			key:                  "  dGVzdGtleQ==  ",
+			wantErr:              false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			token, err := GenerateSASToken(tt.uri, tt.keyName, tt.key, 1*time.Hour)
+			token, err := GenerateSASToken(tt.relayNamespace, tt.hybridConnectionName, tt.keyName, tt.key, 1*time.Hour)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GenerateSASToken() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -61,51 +65,20 @@ func TestGenerateSASToken(t *testing.T) {
 				if !strings.Contains(token, "skn=") {
 					t.Errorf("Token should contain 'skn=' parameter")
 				}
+				// Verify the URI is built correctly
+				if !strings.Contains(token, "myrelay.servicebus.windows.net") {
+					t.Errorf("Token should contain namespace URL")
+				}
 			}
 		})
-	}
-}
-
-func TestGenerateListenerSASToken(t *testing.T) {
-	token, err := GenerateListenerSASToken(
-		"myrelay",
-		"myhc",
-		"RootManageSharedAccessKey",
-		"dGVzdGtleQ==",
-		1*time.Hour,
-	)
-	if err != nil {
-		t.Fatalf("GenerateListenerSASToken() error = %v", err)
-	}
-	if !strings.HasPrefix(token, "SharedAccessSignature ") {
-		t.Errorf("Token should start with 'SharedAccessSignature ', got: %s", token)
-	}
-	// Verify the token contains the expected resource URI
-	if !strings.Contains(token, "myrelay.servicebus.windows.net") {
-		t.Errorf("Token should contain namespace URL")
-	}
-}
-
-func TestGenerateSenderSASToken(t *testing.T) {
-	token, err := GenerateSenderSASToken(
-		"myrelay",
-		"myhc",
-		"RootManageSharedAccessKey",
-		"dGVzdGtleQ==",
-		1*time.Hour,
-	)
-	if err != nil {
-		t.Fatalf("GenerateSenderSASToken() error = %v", err)
-	}
-	if !strings.HasPrefix(token, "SharedAccessSignature ") {
-		t.Errorf("Token should start with 'SharedAccessSignature ', got: %s", token)
 	}
 }
 
 func TestSASTokenExpiry(t *testing.T) {
 	shortExpiry := 5 * time.Second
 	token, err := GenerateSASToken(
-		"https://myrelay.servicebus.windows.net/myhc",
+		"myrelay",
+		"myhc",
 		"RootManageSharedAccessKey",
 		"dGVzdGtleQ==",
 		shortExpiry,

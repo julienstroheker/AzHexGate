@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -10,7 +11,7 @@ import (
 
 // TunnelService defines the interface for tunnel creation
 type TunnelService interface {
-	CreateTunnel(localPort int) (*api.TunnelResponse, error)
+	CreateTunnel(ctx context.Context, localPort int) (*api.TunnelResponse, error)
 }
 
 // tunnelService is a package-level variable that can be set by the gateway
@@ -50,7 +51,8 @@ func TunnelsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create tunnel using service
-	response, err := tunnelService.CreateTunnel(req.LocalPort)
+	logger.Info("Creating tunnel", logging.Int("local_port", req.LocalPort))
+	response, err := tunnelService.CreateTunnel(r.Context(), req.LocalPort)
 	if err != nil {
 		if logger != nil {
 			logger.Error("Failed to create tunnel", logging.Error(err))

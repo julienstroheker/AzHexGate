@@ -53,7 +53,7 @@ func (l *Listener) Start(ctx context.Context, logger *logging.Logger) error {
 		}
 
 		// Accept incoming connection from relay
-		relayConn, err := l.relay.Accept(ctx)
+		relayConn, err := l.relay.Accept(ctx, logger)
 		if err != nil {
 			if ctx.Err() != nil {
 				// Context cancelled, stop gracefully

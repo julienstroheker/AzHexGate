@@ -6,63 +6,65 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// GenerateSASToken generates a Shared Access Signature token for Azure Relay
-// This token can be used by clients to authenticate with Azure Relay Hybrid Connections
-func GenerateSASToken(uri, keyName, key string, expiry time.Duration) (string, error) {
-	// Ensure URI is properly formatted (no trailing slash, lowercase scheme)
+// GenerateSASToken generates a Shared Access Signature token for Azure Relay Hybrid Connections.
+// The token format is the same for both Listener and Sender connections - the access rights
+// are determined by the key used, not by the token format itself.
+//
+// Parameters:
+//   - relayNamespace: The Azure Relay namespace name (e.g., "myrelay")
+//   - hybridConnectionName: The Hybrid Connection name (e.g., "hc-12345")
+//   - keyName: The name of the shared access key (e.g., "RootManageSharedAccessKey")
+//   - key: The shared access key value (as copied from Azure Portal)
+//   - expiry: How long the token should be valid
+//
+// Returns a SAS token string that can be used in the ServiceBusAuthorization header.
+func GenerateSASToken(relayNamespace, hybridConnectionName, keyName, key string, expiry time.Duration) (string, error) {
+	// Build the resource URI for the hybrid connection
+	// Format: https://<namespace>.servicebus.windows.net/<hybridConnectionName>
+	uri := fmt.Sprintf("https://%s.servicebus.windows.net/%s", relayNamespace, hybridConnectionName)
+
+	return generateSASTokenFromURI(uri, keyName, key, expiry)
+}
+
+// generateSASTokenFromURI is the internal implementation that generates a SAS token from a full URI.
+// This is kept for flexibility if we need to generate tokens for other resource types in the future.
+func generateSASTokenFromURI(uri, keyName, key string, expiry time.Duration) (string, error) {
+	// 1. Ensure URI is properly formatted and lowercased
 	uri = strings.TrimSuffix(uri, "/")
+	uri = strings.ToLower(uri)
 
-	// Calculate expiry timestamp (seconds since Unix epoch)
+	// 2. Trim any whitespace from the key (common issue when copying from portal)
+	key = strings.TrimSpace(key)
+
+	// 3. Calculate expiry timestamp (seconds since Unix epoch)
 	expiryTimestamp := time.Now().Add(expiry).Unix()
+	expiryStr := strconv.FormatInt(expiryTimestamp, 10)
 
-	// Create the string to sign: <url>\n<expiry>
-	stringToSign := fmt.Sprintf("%s\n%d", url.QueryEscape(uri), expiryTimestamp)
+	// 4. URL-encode the URI using standard library
+	encodedURI := url.QueryEscape(uri)
 
-	// Decode the key from base64
-	decodedKey, err := base64.StdEncoding.DecodeString(key)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode key: %w", err)
-	}
+	// 5. Create the string to sign: <url-encoded-uri>\n<expiry>
+	stringToSign := encodedURI + "\n" + expiryStr
 
-	// Create HMAC-SHA256 signature
-	h := hmac.New(sha256.New, decodedKey)
+	// 6. Use the key AS IS (do NOT decode base64)
+	// The key from Azure Portal is already the raw key string
+	h := hmac.New(sha256.New, []byte(key))
 	h.Write([]byte(stringToSign))
 	signature := base64.StdEncoding.EncodeToString(h.Sum(nil))
 
-	// Build the SAS token
-	// Format: SharedAccessSignature sr=<url>&sig=<signature>&se=<expiry>&skn=<keyname>
-	token := fmt.Sprintf("SharedAccessSignature sr=%s&sig=%s&se=%d&skn=%s",
-		url.QueryEscape(uri),
-		url.QueryEscape(signature),
-		expiryTimestamp,
-		url.QueryEscape(keyName),
+	// 7. Build the SAS token with URL-encoded signature
+	// Format: SharedAccessSignature sr=<url-encoded-uri>&sig=<url-encoded-sig>&se=<expiry>&skn=<keyname>
+	token := fmt.Sprintf("SharedAccessSignature sr=%s&sig=%s&se=%s&skn=%s",
+		encodedURI,
+		url.QueryEscape(signature), // Must escape the signature!
+		expiryStr,
+		keyName,
 	)
 
 	return token, nil
-}
-
-// GenerateListenerSASToken generates a SAS token with Listen rights for a Hybrid Connection
-func GenerateListenerSASToken(
-	relayNamespace, hybridConnectionName, keyName, key string, expiry time.Duration,
-) (string, error) {
-	// Build the resource URI for the hybrid connection
-	// Format: https://<namespace>.servicebus.windows.net/<hybridConnectionName>
-	uri := fmt.Sprintf("https://%s.servicebus.windows.net/%s", relayNamespace, hybridConnectionName)
-
-	return GenerateSASToken(uri, keyName, key, expiry)
-}
-
-// GenerateSenderSASToken generates a SAS token with Send rights for a Hybrid Connection
-func GenerateSenderSASToken(
-	relayNamespace, hybridConnectionName, keyName, key string, expiry time.Duration,
-) (string, error) {
-	// Build the resource URI for the hybrid connection
-	// Format: https://<namespace>.servicebus.windows.net/<hybridConnectionName>
-	uri := fmt.Sprintf("https://%s.servicebus.windows.net/%s", relayNamespace, hybridConnectionName)
-
-	return GenerateSASToken(uri, keyName, key, expiry)
 }

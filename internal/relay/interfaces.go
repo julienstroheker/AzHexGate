@@ -3,6 +3,8 @@ package relay
 import (
 	"context"
 	"io"
+
+	"github.com/julienstroheker/AzHexGate/internal/logging"
 )
 
 // Connection represents a bidirectional stream between sender and listener
@@ -13,7 +15,7 @@ type Connection interface {
 // Listener represents a relay listener that accepts incoming connections
 type Listener interface {
 	// Accept waits for and returns the next connection to the listener
-	Accept(ctx context.Context) (Connection, error)
+	Accept(ctx context.Context, logger *logging.Logger) (Connection, error)
 
 	// Close closes the listener
 	Close() error

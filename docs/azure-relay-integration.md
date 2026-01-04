@@ -28,11 +28,19 @@ export AZHEXGATE_RELAY_KEY_NAME="RootManageSharedAccessKey"
 # Relay shared access key value (base64 encoded)
 export AZHEXGATE_RELAY_KEY="your-base64-encoded-key"
 
+# Azure Subscription ID (required for creating Hybrid Connections)
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+
+# Resource Group containing the Relay namespace (required for creating Hybrid Connections)
+export AZURE_RESOURCE_GROUP="your-resource-group-name"
+
 # Optional: Base domain for public URLs (default: "azhexgate.com")
 export AZHEXGATE_BASE_DOMAIN="azhexgate.com"
 ```
 
 If these variables are not set, the gateway will fall back to mock mode for testing and development.
+
+**Note:** The gateway uses Azure Default Credential for authentication when creating Hybrid Connections. This supports Managed Identity (in production), Azure CLI (for local development), and environment variables.
 
 #### Client Configuration
 
@@ -51,8 +59,7 @@ The client automatically detects whether it's connecting to a real Azure Relay o
 ### SAS Token Generator (`internal/azure/relay/sas.go`)
 
 Generates Shared Access Signature tokens for authenticating with Azure Relay:
-- `GenerateListenerSASToken` - Creates tokens for local clients
-- `GenerateSenderSASToken` - Creates tokens for gateway senders
+- `GenerateSASToken` - Creates tokens for both listeners and senders (token format is identical; access rights are determined by the key used)
 - Tokens are time-limited and scoped to specific Hybrid Connections
 
 ### Managed Identity Token Provider (`internal/azure/relay/token.go`)

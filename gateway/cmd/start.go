@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	azlog "github.com/Azure/azure-sdk-for-go/sdk/azcore/log"
 	"github.com/julienstroheker/AzHexGate/gateway/http"
 	"github.com/julienstroheker/AzHexGate/gateway/http/handlers"
 	"github.com/julienstroheker/AzHexGate/gateway/management"
@@ -45,6 +46,10 @@ func init() {
 func runServer() error {
 	log := GetLogger()
 	log.Info("Starting gateway server", logging.Int("port", portFlag))
+	// TODO : Configure Azure SDK logging level based on application log level
+	azlog.SetListener(func(event azlog.Event, message string) {
+		log.Debug("Azure SDK log", logging.String("event", string(event)), logging.String("message", message))
+	})
 
 	// Load configuration
 	cfg := config.Load()
@@ -52,10 +57,12 @@ func runServer() error {
 	// Initialize management service if configuration is available
 	if cfg.RelayNamespace != "" && cfg.RelayKeyName != "" && cfg.RelayKey != "" {
 		managementSvc, err := management.NewService(&management.Options{
-			RelayNamespace: cfg.RelayNamespace,
-			RelayKeyName:   cfg.RelayKeyName,
-			RelayKey:       cfg.RelayKey,
-			BaseDomain:     getEnvOrDefault("AZHEXGATE_BASE_DOMAIN", "azhexgate.com"),
+			RelayNamespace:    cfg.RelayNamespace,
+			RelayKeyName:      cfg.RelayKeyName,
+			RelayKey:          cfg.RelayKey,
+			BaseDomain:        getEnvOrDefault("AZHEXGATE_BASE_DOMAIN", "azhexgate.com"),
+			SubscriptionID:    getEnvOrDefault("AZURE_SUBSCRIPTION_ID", ""),
+			ResourceGroupName: getEnvOrDefault("AZURE_RESOURCE_GROUP", ""),
 		})
 		if err != nil {
 			log.Warn("Failed to initialize management service, using mock mode",
@@ -64,6 +71,16 @@ func runServer() error {
 			// Set the tunnel service for the handlers
 			handlers.SetTunnelService(managementSvc)
 			log.Info("Management service initialized with real Azure Relay integration")
+
+			// Configure proxy handler for tunnel routing
+			handlers.SetProxyConfig(&handlers.ProxyConfig{
+				RelayNamespace: cfg.RelayNamespace,
+				RelayKeyName:   cfg.RelayKeyName,
+				RelayKey:       cfg.RelayKey,
+				BaseDomain:     getEnvOrDefault("AZHEXGATE_BASE_DOMAIN", "azhexgate.com"),
+				Logger:         log,
+			})
+			log.Info("Proxy handler configured for tunnel routing")
 		}
 	} else {
 		log.Info("Using mock tunnel provisioning (set AZHEXGATE_RELAY_* environment variables for real integration)")

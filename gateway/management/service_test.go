@@ -1,6 +1,7 @@
 package management
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -72,12 +73,14 @@ func TestService_CreateTunnel(t *testing.T) {
 		RelayKeyName:   "RootManageSharedAccessKey",
 		RelayKey:       "dGVzdGtleQ==",
 		BaseDomain:     "azhexgate.com",
+		// Don't provide SubscriptionID/ResourceGroupName so Hybrid Connection creation is skipped in tests
 	})
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
 
-	response, err := service.CreateTunnel(3000)
+	ctx := context.Background()
+	response, err := service.CreateTunnel(ctx, 3000)
 	if err != nil {
 		t.Fatalf("CreateTunnel() error = %v", err)
 	}
