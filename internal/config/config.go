@@ -14,8 +14,14 @@ type Config struct {
 	// APIKey is the authentication key for the Management API
 	APIKey string
 
-	// RelayNamespace is the Azure Relay namespace URL
+	// RelayNamespace is the Azure Relay namespace name (e.g., "myrelay")
 	RelayNamespace string
+
+	// RelayKeyName is the name of the Relay shared access key
+	RelayKeyName string
+
+	// RelayKey is the Relay shared access key value (base64 encoded)
+	RelayKey string
 
 	// LogLevel controls logging verbosity (debug, info, warn, error)
 	LogLevel string
@@ -28,6 +34,8 @@ func Load() *Config {
 		APIBaseURL:     getEnvOrDefault("AZHEXGATE_API_URL", ""),
 		APIKey:         getEnvOrDefault("AZHEXGATE_API_KEY", ""),
 		RelayNamespace: getEnvOrDefault("AZHEXGATE_RELAY_NAMESPACE", ""),
+		RelayKeyName:   getEnvOrDefault("AZHEXGATE_RELAY_KEY_NAME", ""),
+		RelayKey:       getEnvOrDefault("AZHEXGATE_RELAY_KEY", ""),
 		LogLevel:       getEnvOrDefault("AZHEXGATE_LOG_LEVEL", "info"),
 	}
 }
