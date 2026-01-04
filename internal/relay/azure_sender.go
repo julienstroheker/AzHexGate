@@ -70,14 +70,14 @@ func (s *AzureSender) Dial(ctx context.Context) (Connection, error) {
 	// Add query parameters
 	q := u.Query()
 	q.Set("sb-hc-action", "connect")
-	
+
 	// Check if token looks like a SAS token or Azure AD token
 	// SAS tokens start with "SharedAccessSignature"
 	// Azure AD tokens are just the token value
 	if len(s.token) > 0 {
 		q.Set("sb-hc-token", s.token)
 	}
-	
+
 	u.RawQuery = q.Encode()
 
 	// Set up WebSocket dialer
@@ -97,9 +97,13 @@ func (s *AzureSender) Dial(ctx context.Context) (Connection, error) {
 	conn, resp, err := dialer.DialContext(ctx, u.String(), headers)
 	if err != nil {
 		if resp != nil {
+			_ = resp.Body.Close()
 			return nil, fmt.Errorf("failed to connect to relay (status %d): %w", resp.StatusCode, err)
 		}
 		return nil, fmt.Errorf("failed to connect to relay: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
 	}
 
 	return &azureConnection{

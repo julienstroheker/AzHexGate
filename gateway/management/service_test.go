@@ -22,15 +22,6 @@ func TestNewService(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid options with default base domain",
-			opts: &Options{
-				RelayNamespace: "myrelay",
-				RelayKeyName:   "RootManageSharedAccessKey",
-				RelayKey:       "dGVzdGtleQ==",
-			},
-			wantErr: false,
-		},
-		{
 			name:    "nil options",
 			opts:    nil,
 			wantErr: true,

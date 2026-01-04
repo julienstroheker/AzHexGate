@@ -85,9 +85,13 @@ func (l *AzureListener) connect(ctx context.Context) error {
 	conn, resp, err := dialer.DialContext(ctx, u.String(), http.Header{})
 	if err != nil {
 		if resp != nil {
+			_ = resp.Body.Close()
 			return fmt.Errorf("failed to connect to relay (status %d): %w", resp.StatusCode, err)
 		}
 		return fmt.Errorf("failed to connect to relay: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
 	}
 
 	l.conn = conn
@@ -141,7 +145,7 @@ func (l *AzureListener) handleIncomingConnections() {
 		messageType, data, err := conn.ReadMessage()
 		if err != nil {
 			// Connection error, close and return
-			l.Close()
+			_ = l.Close()
 			return
 		}
 

@@ -46,7 +46,9 @@ func GenerateSASToken(uri, keyName, key string, expiry time.Duration) (string, e
 }
 
 // GenerateListenerSASToken generates a SAS token with Listen rights for a Hybrid Connection
-func GenerateListenerSASToken(relayNamespace, hybridConnectionName, keyName, key string, expiry time.Duration) (string, error) {
+func GenerateListenerSASToken(
+	relayNamespace, hybridConnectionName, keyName, key string, expiry time.Duration,
+) (string, error) {
 	// Build the resource URI for the hybrid connection
 	// Format: https://<namespace>.servicebus.windows.net/<hybridConnectionName>
 	uri := fmt.Sprintf("https://%s.servicebus.windows.net/%s", relayNamespace, hybridConnectionName)
@@ -55,7 +57,9 @@ func GenerateListenerSASToken(relayNamespace, hybridConnectionName, keyName, key
 }
 
 // GenerateSenderSASToken generates a SAS token with Send rights for a Hybrid Connection
-func GenerateSenderSASToken(relayNamespace, hybridConnectionName, keyName, key string, expiry time.Duration) (string, error) {
+func GenerateSenderSASToken(
+	relayNamespace, hybridConnectionName, keyName, key string, expiry time.Duration,
+) (string, error) {
 	// Build the resource URI for the hybrid connection
 	// Format: https://<namespace>.servicebus.windows.net/<hybridConnectionName>
 	uri := fmt.Sprintf("https://%s.servicebus.windows.net/%s", relayNamespace, hybridConnectionName)
