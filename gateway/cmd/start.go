@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/julienstroheker/AzHexGate/gateway/http"
+	"github.com/julienstroheker/AzHexGate/gateway/http/handlers"
+	"github.com/julienstroheker/AzHexGate/gateway/management"
+	"github.com/julienstroheker/AzHexGate/internal/config"
 	"github.com/julienstroheker/AzHexGate/internal/logging"
 	"github.com/spf13/cobra"
 )
@@ -42,6 +45,29 @@ func init() {
 func runServer() error {
 	log := GetLogger()
 	log.Info("Starting gateway server", logging.Int("port", portFlag))
+
+	// Load configuration
+	cfg := config.Load()
+
+	// Initialize management service if configuration is available
+	if cfg.RelayNamespace != "" && cfg.RelayKeyName != "" && cfg.RelayKey != "" {
+		managementSvc, err := management.NewService(&management.Options{
+			RelayNamespace: cfg.RelayNamespace,
+			RelayKeyName:   cfg.RelayKeyName,
+			RelayKey:       cfg.RelayKey,
+			BaseDomain:     getEnvOrDefault("AZHEXGATE_BASE_DOMAIN", "azhexgate.com"),
+		})
+		if err != nil {
+			log.Warn("Failed to initialize management service, using mock mode",
+				logging.Error(err))
+		} else {
+			// Set the tunnel service for the handlers
+			handlers.SetTunnelService(managementSvc)
+			log.Info("Management service initialized with real Azure Relay integration")
+		}
+	} else {
+		log.Info("Using mock tunnel provisioning (set AZHEXGATE_RELAY_* environment variables for real integration)")
+	}
 
 	// Create server with the logger from root command
 	server := http.NewServer(portFlag, log)
@@ -85,4 +111,12 @@ func runServer() error {
 	}
 
 	return nil
+}
+
+// getEnvOrDefault retrieves an environment variable or returns a default value
+func getEnvOrDefault(key, defaultValue string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultValue
 }
