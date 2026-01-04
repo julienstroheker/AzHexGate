@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestGenerateSASToken(t *testing.T) {
+func TestGenerateSASToken(t *testing.T) { //nolint:funlen // Table-driven test
 	tests := []struct {
 		name                 string
 		relayNamespace       string

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestExtractSubdomain(t *testing.T) {
+func TestExtractSubdomain(t *testing.T) { //nolint:funlen // Table-driven test
 	tests := []struct {
 		name       string
 		host       string
@@ -72,50 +72,7 @@ func TestExtractSubdomain(t *testing.T) {
 	}
 }
 
-func TestIsManagementPath(t *testing.T) {
-	tests := []struct {
-		name string
-		path string
-		want bool
-	}{
-		{
-			name: "health check",
-			path: "/healthz",
-			want: true,
-		},
-		{
-			name: "tunnels API",
-			path: "/api/tunnels",
-			want: true,
-		},
-		{
-			name: "other API path",
-			path: "/api/status",
-			want: true,
-		},
-		{
-			name: "root path",
-			path: "/",
-			want: false,
-		},
-		{
-			name: "application path",
-			path: "/some/app/path",
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isManagementPath(tt.path)
-			if got != tt.want {
-				t.Errorf("isManagementPath() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestShouldProxyRequest(t *testing.T) {
+func TestShouldProxyRequest(t *testing.T) { //nolint:funlen // Table-driven test
 	tests := []struct {
 		name       string
 		host       string

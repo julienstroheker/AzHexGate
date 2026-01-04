@@ -1,3 +1,4 @@
+//nolint:dupl // Test structure intentionally similar to azure_listener_test.go
 package relay
 
 import (

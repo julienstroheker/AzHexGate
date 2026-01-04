@@ -14,8 +14,38 @@ import (
 	"github.com/julienstroheker/AzHexGate/internal/api"
 )
 
+// testMutex ensures tests don't run concurrently (shared global state in cobra)
+var testMutex sync.Mutex
+
 func runStartCommandWithTimeout(t *testing.T, args []string, timeout time.Duration) (string, error) {
 	t.Helper()
+
+	testMutex.Lock()
+	defer testMutex.Unlock()
+
+	// Give any previous test resources time to fully clean up
+	time.Sleep(200 * time.Millisecond)
+
+	// Reset flags to defaults before each test
+	portFlag = defaultPort
+	apiURLFlag = defaultAPIURL
+	verboseFlag = false
+	logger = nil // Reset the global logger
+
+	// Reset the cobra command's flag values by looking up and resetting them
+	if f := startCmd.Flags().Lookup("port"); f != nil {
+		_ = f.Value.Set("3000")
+	}
+	if f := startCmd.Flags().Lookup("api-url"); f != nil {
+		_ = f.Value.Set(defaultAPIURL)
+	}
+	if f := rootCmd.PersistentFlags().Lookup("verbose"); f != nil {
+		_ = f.Value.Set("false")
+	}
+
+	// Reset command contexts to avoid cancelled parent contexts
+	rootCmd.SetContext(context.Background())
+	startCmd.SetContext(context.Background())
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -26,27 +56,34 @@ func runStartCommandWithTimeout(t *testing.T, args []string, timeout time.Durati
 	rootCmd.SetOut(buf)
 	rootCmd.SetErr(buf)
 
-	var wg sync.WaitGroup
-	var cmdErr error
+	done := make(chan error, 1)
 
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		cmdErr = rootCmd.ExecuteContext(ctx)
+		done <- rootCmd.ExecuteContext(ctx)
 	}()
 
-	// Give command time to execute and print output
-	time.Sleep(100 * time.Millisecond)
+	// Wait for command to complete or timeout
+	var cmdErr error
+	select {
+	case cmdErr = <-done:
+		// Command completed normally
+	case <-ctx.Done():
+		// Wait a bit for the goroutine to notice the context cancellation
+		// and finish writing any pending output
+		select {
+		case cmdErr = <-done:
+			// Goroutine finished
+		case <-time.After(500 * time.Millisecond):
+			// Timeout waiting for cleanup
+			cmdErr = ctx.Err()
+		}
+	}
 
-	// Wait for goroutine to finish
-	wg.Wait()
+	// Give time for output buffer to be flushed
+	time.Sleep(50 * time.Millisecond)
 
-	// Get final output
 	output := buf.String()
-
-	// Reset for next test
 	rootCmd.SetArgs(nil)
-
 	return output, cmdErr
 }
 
@@ -78,7 +115,7 @@ func TestStartCommandWithMockAPI(t *testing.T) {
 			PublicURL:            "https://mock123.azhexgate.com",
 			RelayEndpoint:        "https://mock-relay.servicebus.windows.net",
 			HybridConnectionName: "hc-mock123",
-			ListenerToken:        "mock-token",
+			ListenerToken:        "mock-listener-token", // Use mock token to enable in-memory relay
 			SessionID:            "mock-session",
 		}
 
@@ -117,7 +154,7 @@ func TestStartCommandWithCustomPort(t *testing.T) {
 			PublicURL:            "https://test456.azhexgate.com",
 			RelayEndpoint:        "https://test-relay.servicebus.windows.net",
 			HybridConnectionName: "hc-test456",
-			ListenerToken:        "test-token",
+			ListenerToken:        "mock-listener-token", // Use mock token to enable in-memory relay
 			SessionID:            "test-session",
 		}
 
@@ -129,7 +166,7 @@ func TestStartCommandWithCustomPort(t *testing.T) {
 
 	// Test start command with custom port
 	args := []string{"start", "--port", "8080", "--api-url", mockServer.URL}
-	output, _ := runStartCommandWithTimeout(t, args, 500*time.Millisecond)
+	output, _ := runStartCommandWithTimeout(t, args, 2*time.Second)
 
 	if !strings.Contains(output, "http://localhost:8080") {
 		t.Errorf("Expected output to contain custom port 8080, got: %s", output)

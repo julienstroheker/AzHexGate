@@ -63,8 +63,9 @@ func (s *AzureSender) Dial(ctx context.Context) (Connection, error) {
 		s.relayEndpoint, s.hybridConnectionName)
 
 	// Add token in ServiceBusAuthorization header (not query string)
+	// Note: This is a custom Azure header, not a standard HTTP header
 	header := http.Header{}
-	header.Add("ServiceBusAuthorization", s.token)
+	header.Set("ServiceBusAuthorization", s.token) //nolint:canonicalheader // Azure Relay custom header
 
 	// Set up WebSocket dialer
 	dialer := websocket.Dialer{

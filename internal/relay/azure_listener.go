@@ -82,8 +82,9 @@ func (l *AzureListener) connect(ctx context.Context, logger *logging.Logger) err
 	}
 
 	// Add token in ServiceBusAuthorization header (not query string)
+	// Note: This is a custom Azure header, not a standard HTTP header
 	header := http.Header{}
-	header.Add("ServiceBusAuthorization", l.token)
+	header.Set("ServiceBusAuthorization", l.token) //nolint:canonicalheader // Azure Relay custom header
 
 	// Set up WebSocket dialer
 	dialer := websocket.Dialer{
@@ -122,7 +123,9 @@ func (l *AzureListener) connect(ctx context.Context, logger *logging.Logger) err
 // Accept waits for and returns the next connection to the listener
 func (l *AzureListener) Accept(ctx context.Context, logger *logging.Logger) (Connection, error) {
 	if logger != nil {
-		logger.Debug("Waiting to accept new connection", logging.String("relay_endpoint", l.relayEndpoint), logging.String("hybrid_connection_name", l.hybridConnectionName))
+		logger.Debug("Waiting to accept new connection",
+			logging.String("relay_endpoint", l.relayEndpoint),
+			logging.String("hybrid_connection_name", l.hybridConnectionName))
 	}
 	l.mu.Lock()
 	if l.closed {
@@ -137,7 +140,7 @@ func (l *AzureListener) Accept(ctx context.Context, logger *logging.Logger) (Con
 			return nil, err
 		}
 		// Start background goroutine to handle accept messages from control channel
-		go l.handleControlChannel()
+		go l.handleControlChannel() //nolint:contextcheck // Background goroutine for control channel
 		l.mu.Lock()
 	}
 	l.mu.Unlock()
@@ -231,6 +234,7 @@ func (l *AzureListener) acceptRendezvousConnection(rendezvousAddress, connection
 		HandshakeTimeout: 30 * time.Second,
 	}
 
+	//nolint:contextcheck // Background context appropriate for rendezvous connections
 	conn, resp, err := dialer.DialContext(context.Background(), rendezvousAddress, http.Header{})
 	if err != nil {
 		if l.logger != nil {

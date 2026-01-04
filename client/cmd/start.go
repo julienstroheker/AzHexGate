@@ -40,6 +40,8 @@ var startCmd = &cobra.Command{
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
+		log.Debug("Creating gateway client", logging.String("api_url", apiURLFlag))
+
 		// Create Gateway API client with only overrides
 		gatewayClient := gateway.NewClient(&gateway.Options{
 			BaseURL: apiURLFlag,
